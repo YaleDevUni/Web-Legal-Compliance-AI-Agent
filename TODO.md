@@ -94,21 +94,21 @@
 ## 4. 임베딩 & 색인 (`src/embedder/`)
 
 ### 4-1. chunker.py
-- [ ] **[Red]** `tests/embedder/test_chunker.py` 작성
-  - [ ] chunk_size 이하 텍스트 → 단일 청크 테스트
-  - [ ] chunk_size 초과 텍스트 → 복수 청크 + overlap 테스트
-  - [ ] 메타데이터 보존 테스트 (article_id, sha 등)
-- [ ] **[Green]** `src/embedder/chunker.py` 구현 (RecursiveCharacterTextSplitter)
-- [ ] **[Refactor]** 법령 조항 구분자 우선 분할
+- [x] **[Red]** `tests/embedder/test_chunker.py` 작성
+  - [x] chunk_size 이하 텍스트 → 단일 청크 테스트
+  - [x] chunk_size 초과 텍스트 → 복수 청크 + overlap 테스트
+  - [x] 메타데이터 보존 테스트 (article_id, sha 등)
+- [x] **[Green]** `src/embedder/chunker.py` 구현 (RecursiveCharacterTextSplitter)
+- [x] **[Refactor]** 법령 조항 구분자 우선 분할
 
 ### 4-2. indexer.py
-- [ ] **[Red]** `tests/embedder/test_indexer.py` 작성 (Qdrant mock)
-  - [ ] 신규 조항 upsert 테스트
-  - [ ] 변경된 조항만 재임베딩 테스트
-  - [ ] 변경 없는 조항 스킵 테스트
-  - [ ] 컬렉션 없으면 자동 생성 테스트
-- [ ] **[Green]** `src/embedder/indexer.py` 구현 (qdrant-client)
-- [ ] **[Refactor]** 배치 upsert로 성능 최적화
+- [x] **[Red]** `tests/embedder/test_indexer.py` 작성 (Qdrant mock)
+  - [x] 신규 조항 upsert 테스트
+  - [x] 변경된 조항만 재임베딩 테스트
+  - [x] 변경 없는 조항 스킵 테스트
+  - [x] 컬렉션 없으면 자동 생성 테스트
+- [x] **[Green]** `src/embedder/indexer.py` 구현 (qdrant-client)
+- [x] **[Refactor]** 배치 upsert로 성능 최적화
 
 ---
 
@@ -312,8 +312,8 @@
 | collector/parser | **완료** | **완료** | **완료** |
 | collector/law_api | **완료** | **완료** | **완료** |
 | collector/scheduler | **완료** | **완료** | **완료** |
-| embedder/chunker | 미완료 | 미완료 | 미완료 |
-| embedder/indexer | 미완료 | 미완료 | 미완료 |
+| embedder/chunker | **완료** | **완료** | **완료** |
+| embedder/indexer | **완료** | **완료** | **완료** |
 | input/file_loader | 미완료 | 미완료 | 미완료 |
 | input/url_parser | 미완료 | 미완료 | 미완료 |
 | input/token_splitter | 미완료 | 미완료 | 미완료 |
