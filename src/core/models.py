@@ -35,6 +35,7 @@ class LawArticle(BaseModel):
 
 
 class Citation(BaseModel):
+    article_id: str
     law_name: str
     article_number: str
     sha256: str

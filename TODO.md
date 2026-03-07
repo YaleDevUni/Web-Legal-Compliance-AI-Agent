@@ -148,52 +148,54 @@
 ## 6. 검색 레이어 (`src/retrieval/`)
 
 ### 6-1. cache.py
-- [ ] **[Red]** `tests/retrieval/test_cache.py` 작성 (Redis mock)
-  - [ ] cosine ≥ 0.95 → 캐시 히트 반환 테스트
-  - [ ] cosine < 0.95 → 캐시 미스 테스트
-  - [ ] TTL 1시간 설정 검증 테스트
-  - [ ] 캐시 저장 테스트
-- [ ] **[Green]** `src/retrieval/cache.py` 구현 (redis-py)
-- [ ] **[Refactor]** 직렬화 방식 통일 (JSON)
+- [x] **[Red]** `tests/retrieval/test_cache.py` 작성 (Redis mock)
+  - [x] cosine ≥ 0.95 → 캐시 히트 반환 테스트
+  - [x] cosine < 0.95 → 캐시 미스 테스트
+  - [x] TTL 1시간 설정 검증 테스트
+  - [x] 캐시 저장 테스트
+- [x] **[Green]** `src/retrieval/cache.py` 구현 (redis-py)
+- [x] **[Refactor]** 직렬화 방식 통일 (JSON)
 
 ### 6-2. bm25.py
-- [ ] **[Red]** `tests/retrieval/test_bm25.py` 작성
-  - [ ] 조항 번호 정확 매칭 테스트 (e.g. "제17조")
-  - [ ] 법률 용어 매칭 테스트
-  - [ ] 빈 코퍼스 예외 테스트
-- [ ] **[Green]** `src/retrieval/bm25.py` 구현 (rank-bm25)
-- [ ] **[Refactor]** 형태소 분석기 연동 (선택)
+- [x] **[Red]** `tests/retrieval/test_bm25.py` 작성
+  - [x] 조항 번호 정확 매칭 테스트 (e.g. "제17조")
+  - [x] 법률 용어 매칭 테스트
+  - [x] 빈 코퍼스 예외 테스트
+- [x] **[Green]** `src/retrieval/bm25.py` 구현 (rank-bm25)
+- [x] **[Refactor]** 형태소 분석기 연동 (선택)
 
 ### 6-3. vector.py
-- [ ] **[Red]** `tests/retrieval/test_vector.py` 작성 (Qdrant mock)
-  - [ ] 쿼리 임베딩 생성 테스트
-  - [ ] Qdrant 검색 결과 반환 테스트
-  - [ ] payload 필터 적용 테스트
-- [ ] **[Green]** `src/retrieval/vector.py` 구현 (text-embedding-3-small + qdrant-client)
-- [ ] **[Refactor]** 배치 임베딩 처리
+- [x] **[Red]** `tests/retrieval/test_vector.py` 작성 (Qdrant mock)
+  - [x] 쿼리 임베딩 생성 테스트
+  - [x] Qdrant 검색 결과 반환 테스트
+  - [x] payload 필터 적용 테스트
+- [x] **[Green]** `src/retrieval/vector.py` 구현 (text-embedding-3-small + qdrant-client)
+- [x] **[Refactor]** 배치 임베딩 처리
 
 ### 6-4. rrf.py
-- [ ] **[Red]** `tests/retrieval/test_rrf.py` 작성
-  - [ ] BM25 + Vector 결과 융합 점수 계산 테스트
-  - [ ] 중복 문서 통합 테스트
-  - [ ] 결과 내림차순 정렬 테스트
-- [ ] **[Green]** `src/retrieval/rrf.py` 구현 (Reciprocal Rank Fusion)
-- [ ] **[Refactor]** k 파라미터 config화
+- [x] **[Red]** `tests/retrieval/test_rrf.py` 작성
+  - [x] BM25 + Vector 결과 융합 점수 계산 테스트
+  - [x] 중복 문서 통합 테스트
+  - [x] 결과 내림차순 정렬 테스트
+- [x] **[Green]** `src/retrieval/rrf.py` 구현 (Reciprocal Rank Fusion)
+- [x] **[Refactor]** k 파라미터 config화
 
 ### 6-5. dynamic_topk.py
-- [ ] **[Red]** `tests/retrieval/test_dynamic_topk.py` 작성
-  - [ ] 코드 입력 → K = 8 반환 테스트
-  - [ ] 단순 질문 → K = 3 반환 테스트
-  - [ ] 중간 복잡도 분기 테스트
-- [ ] **[Green]** `src/retrieval/dynamic_topk.py` 구현
-- [ ] **[Refactor]** 복잡도 판별 기준 고도화
+- [x] **[Red]** `tests/retrieval/test_dynamic_topk.py` 작성
+  - [x] threshold 이상 스코어 개수 클램핑 테스트
+  - [x] 빈 스코어 → min_k 반환 테스트
+  - [x] max_k 초과 클램핑 테스트
+- [x] **[Green]** `src/retrieval/dynamic_topk.py` 구현
+- [x] **[Refactor]** 복잡도 판별 기준 고도화
 
 ### 6-6. query_rewriter.py
-- [ ] **[Red]** `tests/retrieval/test_query_rewriter.py` 작성 (LLM mock)
-  - [ ] HyDE 가상 문서 생성 테스트
-  - [ ] Multi-Query 확장 테스트 (N개 쿼리 반환)
-- [ ] **[Green]** `src/retrieval/query_rewriter.py` 구현
-- [ ] **[Refactor]** 프롬프트 템플릿 분리
+- [x] **[Red]** `tests/retrieval/test_query_rewriter.py` 작성 (LLM mock)
+  - [x] LLM 재작성 쿼리 반환 테스트
+  - [x] Multi-Query 확장 테스트 (N개 쿼리 반환)
+  - [x] 빈 쿼리 ValueError 테스트
+  - [x] 빈 LLM 응답 fallback 테스트
+- [x] **[Green]** `src/retrieval/query_rewriter.py` 구현
+- [x] **[Refactor]** 프롬프트 템플릿 분리
 
 ---
 
@@ -319,12 +321,12 @@
 | input/file_loader | **완료** | **완료** | **완료** |
 | input/url_parser | **완료** | **완료** | **완료** |
 | input/token_splitter | **완료** | **완료** | **완료** |
-| retrieval/cache | 미완료 | 미완료 | 미완료 |
-| retrieval/bm25 | 미완료 | 미완료 | 미완료 |
-| retrieval/vector | 미완료 | 미완료 | 미완료 |
-| retrieval/rrf | 미완료 | 미완료 | 미완료 |
-| retrieval/dynamic_topk | 미완료 | 미완료 | 미완료 |
-| retrieval/query_rewriter | 미완료 | 미완료 | 미완료 |
+| retrieval/cache | **완료** | **완료** | **완료** |
+| retrieval/bm25 | **완료** | **완료** | **완료** |
+| retrieval/vector | **완료** | **완료** | **완료** |
+| retrieval/rrf | **완료** | **완료** | **완료** |
+| retrieval/dynamic_topk | **완료** | **완료** | **완료** |
+| retrieval/query_rewriter | **완료** | **완료** | **완료** |
 | agents/citation | 미완료 | 미완료 | 미완료 |
 | agents/privacy | 미완료 | 미완료 | 미완료 |
 | agents/security | 미완료 | 미완료 | 미완료 |

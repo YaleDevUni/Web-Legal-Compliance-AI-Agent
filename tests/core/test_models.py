@@ -93,6 +93,7 @@ class TestCitation:
         """유효한 Citation 객체 생성 확인"""
         from core.models import Citation
         citation = Citation(
+            article_id="PA_17",
             law_name="개인정보 보호법",
             article_number="제17조",
             sha256="a3f2c1d4e5b678901234567890abcdef1234567890abcdef1234567890abcdef",
@@ -107,6 +108,7 @@ class TestCitation:
         from core.models import Citation
         sha = "a3f2c1d4" + "e" * 56
         citation = Citation(
+            article_id="PA_17",
             law_name="개인정보 보호법",
             article_number="제17조",
             sha256=sha,
@@ -120,6 +122,7 @@ class TestCitation:
         from core.models import Citation
         sha = "a3f2c1d4" + "e" * 56
         citation = Citation(
+            article_id="PA_17",
             law_name="개인정보 보호법",
             article_number="제17조",
             sha256=sha,
@@ -139,6 +142,7 @@ class TestComplianceReport:
     def _make_citation(self):
         from core.models import Citation
         return Citation(
+            article_id="PA_17",
             law_name="개인정보 보호법",
             article_number="제17조",
             sha256="a" * 64,
