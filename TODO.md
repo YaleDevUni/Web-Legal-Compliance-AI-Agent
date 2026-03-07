@@ -42,22 +42,22 @@
 ## 2. SHA-256 무결성 관리 (`src/integrity/`)
 
 ### 2-1. hasher.py
-- [ ] **[Red]** `tests/integrity/test_hasher.py` 작성
-  - [ ] 동일 텍스트 → 동일 해시 테스트
-  - [ ] 다른 텍스트 → 다른 해시 테스트
-  - [ ] 빈 문자열 해시 테스트
-- [ ] **[Green]** `src/integrity/hasher.py` 구현 (hashlib.sha256)
-- [ ] **[Refactor]** 인코딩 처리 통일
+- [x] **[Red]** `tests/integrity/test_hasher.py` 작성
+  - [x] 동일 텍스트 → 동일 해시 테스트
+  - [x] 다른 텍스트 → 다른 해시 테스트
+  - [x] 빈 문자열 해시 테스트
+- [x] **[Green]** `src/integrity/hasher.py` 구현 (hashlib.sha256)
+- [x] **[Refactor]** 인코딩 처리 통일
 
 ### 2-2. db.py
-- [ ] **[Red]** `tests/integrity/test_db.py` 작성 (SQLite in-memory)
-  - [ ] 테이블 생성 테스트
-  - [ ] 신규 조항 INSERT 테스트
-  - [ ] 해시 변경 감지 테스트 (hash_curr ≠ hash_prev → True 반환)
-  - [ ] 해시 동일 시 스킵 테스트 (→ False 반환)
-  - [ ] 이력 조회 테스트
-- [ ] **[Green]** `src/integrity/db.py` 구현 (SQLite CRUD)
-- [ ] **[Refactor]** 트랜잭션 처리 및 예외 핸들링
+- [x] **[Red]** `tests/integrity/test_db.py` 작성 (SQLite in-memory)
+  - [x] 테이블 생성 테스트
+  - [x] 신규 조항 INSERT 테스트
+  - [x] 해시 변경 감지 테스트 (hash_curr ≠ hash_prev → True 반환)
+  - [x] 해시 동일 시 스킵 테스트 (→ False 반환)
+  - [x] 이력 조회 테스트
+- [x] **[Green]** `src/integrity/db.py` 구현 (SQLite CRUD)
+- [x] **[Refactor]** 트랜잭션 처리 및 예외 핸들링
 
 ---
 
@@ -307,8 +307,8 @@
 | 프로젝트 초기 설정 | - | **완료** | - |
 | core/models | **완료** | **완료** | **완료** |
 | core/config | **완료** | **완료** | **완료** |
-| integrity/hasher | 미완료 | 미완료 | 미완료 |
-| integrity/db | 미완료 | 미완료 | 미완료 |
+| integrity/hasher | **완료** | **완료** | **완료** |
+| integrity/db | **완료** | **완료** | **완료** |
 | collector/parser | 미완료 | 미완료 | 미완료 |
 | collector/law_api | 미완료 | 미완료 | 미완료 |
 | collector/scheduler | 미완료 | 미완료 | 미완료 |
