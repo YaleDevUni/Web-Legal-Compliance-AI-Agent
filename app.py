@@ -101,7 +101,8 @@ if st.button("🔍 준수 여부 분석", type="primary", disabled=not input_tex
                     with st.expander(f"위반: {report.description}", expanded=True):
                         st.write(report.description)
                         if report.recommendation:
-                            st.info(f"💡 권고사항: {report.recommendation}")
+                            st.markdown("**🔍 문제 코드**")
+                            st.code(report.recommendation)
                         _render_citations(report.citations)
 
             if compliant:

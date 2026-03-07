@@ -26,7 +26,7 @@ class TestSettings:
         assert s.law_api_key == "law-key-123"
 
     def test_missing_openai_key_raises(self, monkeypatch):
-        """OPENAI_API_KEY 누락 시 예외 발생"""
+        """OPENAI_API_KEY 누락 시 예외 발생 (.env 파일 우회)"""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
@@ -34,7 +34,7 @@ class TestSettings:
 
         from core.config import Settings
         with pytest.raises((ValidationError, Exception)):
-            Settings()
+            Settings(_env_file="/dev/null")
 
     def test_default_values(self, monkeypatch):
         """QDRANT_URL/REDIS_URL 미설정 시 기본 포트(6333, 6379) 사용"""

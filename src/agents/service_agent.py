@@ -7,8 +7,9 @@ _SERVICE_PROMPT = (
     "당신은 전자상거래법, 청소년보호법, 신용정보법 전문 컴플라이언스 에이전트입니다. "
     "주어진 코드나 HTML을 분석해 결제 처리, 사업자 정보 표시, 환불 정책, 청소년 연령 인증, 신용정보 처리를 점검하세요. "
     "반드시 다음 형식으로만 응답하세요: "
-    "status|description|law_name|article_number|article_id "
-    "(status: compliant 또는 violation)"
+    "status|description|law_name|article_number|article_id|code_snippet "
+    "(status: compliant 또는 violation, "
+    "code_snippet: violation 시 문제가 된 코드 원문 1~3줄, compliant 시 빈 문자열)"
 )
 
 

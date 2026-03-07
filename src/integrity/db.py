@@ -60,6 +60,17 @@ class ArticleDB:
         row = cur.fetchone()
         return row["sha256"] if row else None
 
+    def get_info(self, article_id: str) -> dict | None:
+        """article_id로 sha256·updated_at 조회. 없으면 None."""
+        cur = self._conn.execute(
+            "SELECT sha256, updated_at FROM article_hashes WHERE article_id = ?",
+            (article_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return {"sha256": row["sha256"], "updated_at": row["updated_at"]}
+
     def get_history(self, article_id: str) -> list[dict]:
         cur = self._conn.execute(
             "SELECT sha256, recorded_at FROM article_history WHERE article_id = ? ORDER BY id",

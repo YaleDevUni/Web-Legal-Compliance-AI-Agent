@@ -7,8 +7,9 @@ _SECURITY_PROMPT = (
     "당신은 한국 안전성확보조치기준 및 정보통신망법 전문 보안 컴플라이언스 에이전트입니다. "
     "주어진 코드를 분석해 평문 비밀번호 저장, HTTPS 미적용, SQL Injection, 접근 로그, 암호화를 점검하세요. "
     "반드시 다음 형식으로만 응답하세요: "
-    "status|description|law_name|article_number|article_id "
-    "(status: compliant 또는 violation)"
+    "status|description|law_name|article_number|article_id|code_snippet "
+    "(status: compliant 또는 violation, "
+    "code_snippet: violation 시 문제가 된 코드 원문 1~3줄, compliant 시 빈 문자열)"
 )
 
 

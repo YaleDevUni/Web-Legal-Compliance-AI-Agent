@@ -3,15 +3,17 @@ from core.models import ComplianceReport
 from agents.privacy_agent import PrivacyAgent
 from agents.security_agent import SecurityAgent
 from agents.service_agent import ServiceAgent
+from integrity.db import ArticleDB
 
 
 class Orchestrator:
     """3개 에이전트를 순차 호출해 결과를 병합하는 오케스트레이터."""
 
     def __init__(self) -> None:
-        self.privacy_agent = PrivacyAgent()
-        self.security_agent = SecurityAgent()
-        self.service_agent = ServiceAgent()
+        db = ArticleDB()
+        self.privacy_agent = PrivacyAgent(db=db)
+        self.security_agent = SecurityAgent(db=db)
+        self.service_agent = ServiceAgent(db=db)
 
     def run(self, code_text: str) -> list[ComplianceReport]:
         """3개 에이전트를 호출해 ComplianceReport 리스트로 병합 반환."""
