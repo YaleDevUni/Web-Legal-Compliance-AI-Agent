@@ -1,0 +1,26 @@
+# Web Legal Compliance AI Agent
+
+This project is an AI-powered agent designed to analyze web pages or source code for compliance with various Korean legal regulations. It utilizes a multi-agent RAG (Retrieval-Augmented Generation) architecture to provide detailed compliance reports.
+
+## Key Features & Recent Improvements
+
+The agent's pipeline has been recently updated with several key improvements to enhance accuracy and efficiency.
+
+### 1. Dynamic Agent Orchestration
+
+To avoid unnecessary checks and improve performance, the system now incorporates a purpose-identification step.
+
+- **Purpose Identification:** The `Orchestrator` first uses an LLM to analyze the target code and determine the website's primary purpose (e.g., "E-commerce", "Blog", "Medical Institution").
+- **Selective Execution:** Based on the identified purpose, the `Orchestrator` dynamically selects and runs only the relevant compliance agents. For example, the `ServiceAgent` (which handles e-commerce laws) is only executed if the website is identified as a commercial platform.
+
+### 2. Flexible RAG Prompting
+
+The core RAG prompt has been made more flexible to handle situations where retrieved legal documents have low relevance.
+
+- Instead of being forced to make a judgment based on poor context, the LLM is now instructed to respond with `compliant` and an `UNKNOWN` article ID if the provided documents are not applicable. This reduces false positives and improves the reliability of the analysis.
+
+### 3. Enhanced Logging
+
+Detailed logging has been integrated into the agent pipeline to provide clear visibility into the system's internal operations.
+
+- The logs now show the exact query used by each agent, the `top_k` documents retrieved from the vector store (before and after filtering), and the final compliance status, making debugging and performance tuning significantly easier.
