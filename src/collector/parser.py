@@ -99,8 +99,20 @@ def parse_law_html(
 
     # ── 법령명 ────────────────────────────────────────────────────────────────
     confnla = soup.find("div", class_="confnla1")
-    h2 = confnla.find("h2") if confnla else None
-    law_name = h2.get_text(strip=True) if h2 else "알 수 없음"
+    law_name = "알 수 없음"
+    h2_tag = None
+
+    if confnla:
+        h2_tag = confnla.find("h2") # Try finding as child first
+        if not h2_tag:
+            h2_tag = confnla.find_next_sibling("h2") # If not found, try as sibling
+
+    if h2_tag:
+        law_name = h2_tag.get_text(strip=True)
+
+    if law_name == "알 수 없음":
+        logger.warning(f"HTML에서 법령명 추출 실패. (confnla1 내부 h2 또는 다음 형제 h2 찾기 실패)")
+        return []
 
     # ── 시행일 ────────────────────────────────────────────────────────────────
     updated_at = datetime.now()
@@ -109,31 +121,44 @@ def parse_law_html(
         m = _ENACT_DATE_RE.search(subtit.get_text())
         if m:
             updated_at = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    else:
+        logger.warning(f"HTML에서 'subtit1' div를 찾을 수 없음. 시행일 파싱 실패. 현재 시간 사용.")
 
     law_url = f"https://www.law.go.kr/법령/{law_name}"
 
     # ── 조문 순회 ─────────────────────────────────────────────────────────────
     articles: list[LawArticle] = []
-    for anchor in soup.find_all("a", attrs={"name": _ANCHOR_RE}):
-        article_id = _anchor_to_article_id(anchor["name"], law_id_prefix)
+    # name 속성이 _ANCHOR_RE 패턴과 일치하는 <a> 태그를 찾아 조문 시작점을 식별
+    anchor_tags = soup.find_all("a", attrs={"name": _ANCHOR_RE})
+    if not anchor_tags:
+        logger.warning(f"HTML에서 조문 앵커 태그를 찾을 수 없음. (법령명: {law_name})")
+
+    for anchor in anchor_tags:
+        article_id_raw = anchor["name"]
+        article_id = _anchor_to_article_id(article_id_raw, law_id_prefix)
         if not article_id:
+            logger.warning(f"앵커 '{article_id_raw}'에서 article_id 파싱 실패. 스킵.")
             continue
 
         pgroup = anchor.find_next_sibling("div", class_="pgroup")
         if not pgroup:
+            logger.warning(f"article_id '{article_id}'에 해당하는 'pgroup' div를 찾을 수 없음. 스킵.")
             continue
 
         # 장/절 제목 div는 gtit 클래스 p 포함 → 스킵
         if pgroup.find("p", class_="gtit"):
+            logger.debug(f"article_id '{article_id}'는 장/절 제목이므로 스킵.")
             continue
 
         # 조문 제목 확인 (span.bl에 '제N조' 포함)
         bl = pgroup.find("span", class_="bl")
         if not bl:
+            logger.warning(f"article_id '{article_id}'에서 조문 제목 span.bl을 찾을 수 없음. 스킵.")
             continue
         header_text = bl.get_text(strip=True)
         mn = _ARTICLE_NUM_RE.match(header_text)
         if not mn:
+            logger.warning(f"article_id '{article_id}'의 헤더 텍스트 '{header_text}'에서 조문 번호 패턴 불일치. 스킵.")
             continue
         article_number = mn.group(1)
 
@@ -148,7 +173,7 @@ def parse_law_html(
         ).strip()
 
         if not content:
-            logger.warning(f"조문내용 누락: {article_id}")
+            logger.warning(f"조문내용 누락: {article_id}. 스킵.")
             continue
 
         try:
@@ -166,4 +191,7 @@ def parse_law_html(
         except Exception as e:
             logger.error(f"LawArticle 생성 실패 ({article_id}): {e}")
 
+    if not articles:
+        logger.warning(f"'{law_name}' ({law_id_prefix}) 파일에서 최종적으로 파싱된 조문이 0개입니다.")
+        
     return articles

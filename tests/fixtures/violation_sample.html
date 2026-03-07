@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>개인정보 위반 테스트 샘플 사이트</title>
+  <!--
+    [테스트 목적] 개인정보 보호법 4가지 위반 사례를 포함한 HTML/JS 파일
+    위반 항목:
+      1. 제15조 - 동의 없이 개인정보 수집
+      2. 제23조 - 민감정보(건강정보) 무단 처리
+      3. 제24조 - 고유식별정보(주민등록번호) 수집
+      4. 제29조 - 개인정보 평문 저장 (안전조치 미이행)
+  -->
+</head>
+<body>
+
+<h1>회원가입</h1>
+
+<!-- 위반 1: 제15조 — 수집·이용 동의 없이 개인정보 수집
+     개인정보 수집·이용 목적, 항목, 보유기간 고지 및 동의 절차 없음 -->
+<form id="signupForm" action="/register" method="POST">
+  <label>이름: <input type="text" name="name" required></label><br>
+  <label>이메일: <input type="email" name="email" required></label><br>
+  <label>전화번호: <input type="tel" name="phone"></label><br>
+
+  <!-- 위반 2: 제23조 — 민감정보(건강·의료) 무단 처리
+       질병·건강정보는 정보주체의 별도 동의 없이 처리 불가 -->
+  <label>건강상태(질병 여부): <input type="text" name="health_status"></label><br>
+  <label>복용 중인 약: <input type="text" name="medication"></label><br>
+
+  <!-- 위반 3: 제24조 — 고유식별정보(주민등록번호) 수집
+       법령 근거 없이 주민등록번호를 수집하는 행위 -->
+  <label>주민등록번호: <input type="text" name="rrn" placeholder="000000-0000000"></label><br>
+
+  <!-- 동의 체크박스조차 없이 바로 제출 -->
+  <button type="submit">가입하기</button>
+</form>
+
+<script>
+// 위반 4: 제29조 — 안전조치 미이행 (개인정보 평문 저장)
+// 비밀번호를 해싱 없이 localStorage에 평문 저장
+document.getElementById("signupForm").addEventListener("submit", function(e) {
+  e.preventDefault();
+  var formData = new FormData(e.target);
+
+  // 비밀번호 평문 저장 (암호화·해싱 없음)
+  var userData = {
+    name:          formData.get("name"),
+    email:         formData.get("email"),
+    phone:         formData.get("phone"),
+    health_status: formData.get("health_status"),  // 민감정보 그대로 저장
+    medication:    formData.get("medication"),
+    rrn:           formData.get("rrn"),             // 주민등록번호 평문 저장
+    password:      formData.get("password"),        // 비밀번호 평문 저장
+    joined_at:     new Date().toISOString()
+  };
+
+  // 암호화 없이 로컬스토리지에 그대로 저장
+  localStorage.setItem("user_" + userData.email, JSON.stringify(userData));
+
+  // 서버로도 평문 전송 (HTTPS 여부 확인 없음)
+  fetch("http://example.com/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(userData)   // 민감정보 포함 전체 평문 전송
+  });
+});
+</script>
+
+</body>
+</html>

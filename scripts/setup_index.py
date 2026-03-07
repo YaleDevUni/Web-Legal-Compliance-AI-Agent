@@ -1,4 +1,9 @@
 """scripts/setup_index.py — 법령 수집 → SHA 비교 → 벡터 색인 전체 파이프라인"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 from core.models import LawArticle
 
 

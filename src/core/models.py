@@ -41,6 +41,7 @@ class Citation(BaseModel):
     sha256: str
     url: AnyHttpUrl
     updated_at: datetime
+    article_content: str = ""  # Qdrant에서 검색된 실제 법령 조문 텍스트
 
     @field_validator("sha256")
     @classmethod
@@ -58,6 +59,14 @@ class Citation(BaseModel):
         return f"[{self.law_name} {self.article_number} · sha:{self.short_sha} · {date_str}]"
 
 
+class SourceLocation(BaseModel):
+    """원본 코드에서 문제 코드 스니펫의 위치 정보."""
+
+    line_start: int
+    line_end: int
+    snippet: str
+
+
 class ComplianceStatus(str, Enum):
     COMPLIANT = "compliant"
     VIOLATION = "violation"
@@ -68,6 +77,7 @@ class ComplianceReport(BaseModel):
     description: str
     citations: Annotated[list[Citation], Field(min_length=1)]
     recommendation: str = ""
+    source_location: SourceLocation | None = None
 
     @property
     def is_compliant(self) -> bool:

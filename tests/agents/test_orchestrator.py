@@ -18,6 +18,7 @@ SAMPLE_CODE = "def login(): pass"
 def orchestrator(mock_llm, mocker):
     """3개 에이전트를 mock으로 교체 후 Orchestrator 초기화"""
     mocker.patch("agents._base_agent.ChatOpenAI", return_value=mock_llm)
+    mocker.patch("agents.orchestrator.ChatOpenAI", return_value=mock_llm)
     from agents.orchestrator import Orchestrator
     return Orchestrator()
 
@@ -32,14 +33,15 @@ class TestOrchestrator:
         assert isinstance(result, list)
 
     def test_all_agents_called(self, orchestrator, mocker):
-        """3개 에이전트 analyze() 모두 호출됨"""
+        """3개 에이전트 analyze() 모두 호출됨 (search_query kwarg 포함)"""
         p = mocker.patch.object(orchestrator.privacy_agent, "analyze", return_value=[])
         s = mocker.patch.object(orchestrator.security_agent, "analyze", return_value=[])
         sv = mocker.patch.object(orchestrator.service_agent, "analyze", return_value=[])
         orchestrator.run(SAMPLE_CODE)
-        p.assert_called_once_with(SAMPLE_CODE)
-        s.assert_called_once_with(SAMPLE_CODE)
-        sv.assert_called_once_with(SAMPLE_CODE)
+        # code_text는 첫 번째 인자로, search_query는 kwarg로 전달됨
+        assert p.call_args[0][0] == SAMPLE_CODE
+        assert s.call_args[0][0] == SAMPLE_CODE
+        assert sv.call_args[0][0] == SAMPLE_CODE
 
     def test_results_merged(self, orchestrator, mocker):
         """각 에이전트 결과가 하나의 리스트로 병합됨"""

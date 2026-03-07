@@ -13,15 +13,20 @@ def rrf_merge(
     """
     scores: dict[str, float] = {}
     texts: dict[str, str] = {}
+    metadatas: dict[str, dict] = {}
 
     for ranked_list in (bm25_results, vector_results):
         for rank, item in enumerate(ranked_list, start=1):
             doc_id = item["id"]
             scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
             texts.setdefault(doc_id, item["text"])
+            metadatas.setdefault(doc_id, item.get("metadata", {}))
 
     return sorted(
-        [{"id": doc_id, "text": texts[doc_id], "score": score} for doc_id, score in scores.items()],
+        [
+            {"id": doc_id, "text": texts[doc_id], "score": score, "metadata": metadatas[doc_id]}
+            for doc_id, score in scores.items()
+        ],
         key=lambda x: x["score"],
         reverse=True,
     )

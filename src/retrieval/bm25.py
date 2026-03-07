@@ -24,6 +24,11 @@ class BM25Retriever:
             enumerate(scores), key=lambda x: x[1], reverse=True
         )[:top_k]
         return [
-            {"id": self._corpus[i]["id"], "text": self._corpus[i]["text"], "score": float(s)}
+            {
+                "id": self._corpus[i]["id"],
+                "text": self._corpus[i]["text"],
+                "score": float(s),
+                "metadata": self._corpus[i].get("metadata", {}),
+            }
             for i, s in ranked
         ]

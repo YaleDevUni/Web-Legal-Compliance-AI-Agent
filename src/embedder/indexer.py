@@ -58,4 +58,16 @@ class ArticleIndexer:
             )
             for c, v in zip(all_chunks, vectors)
         ]
-        self._client.upsert(collection_name=self._collection, points=points)
+        
+        if not points:
+            logger.info("색인할 포인트가 없습니다.")
+            return
+
+        # Batch upsert to avoid payload size limit
+        _BATCH_SIZE = 100 # Adjust as needed
+        logger.info(f"총 {len(points)}개의 포인트를 {_BATCH_SIZE}개씩 배치하여 색인합니다.")
+        for i in range(0, len(points), _BATCH_SIZE):
+            batch = points[i : i + _BATCH_SIZE]
+            self._client.upsert(collection_name=self._collection, points=batch)
+            logger.info(f"  - 배치 {i//_BATCH_SIZE + 1} 처리 완료 ({len(batch)}개 포인트).")
+        logger.info(f"총 {len(points)}개 포인트 색인 완료.")

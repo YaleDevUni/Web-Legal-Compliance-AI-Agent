@@ -50,3 +50,12 @@ A significant improvement has been made to how legal documents are processed and
     - The chunking logic (`src/embedder/chunker.py`) now splits articles based on these semantic units (paragraphs/sections).
     - Crucially, the full article title (e.g., "개인정보 보호법 제23조(민감정보의 처리 제한)") is **prepended to every chunk** derived from that article. This ensures that even small chunks carry their essential legal context, drastically improving retrieval accuracy.
 - **Impact:** This change is expected to significantly enhance the retriever's ability to find highly relevant legal articles, such as `PA_23` for sensitive information, thereby improving the overall quality and accuracy of the compliance analysis.
+
+### 7. Hybrid Retrieval with Metadata Preservation
+
+The retrieval system has been refined to ensure full traceability and consistency across different search methods.
+
+- **Metadata Consistency:** Fixed a critical issue where the `BM25Retriever` and the `rrf_merge` function were stripping out document metadata (such as `article_id`, `law_name`, etc.) during the search and ranking process.
+- **Unified Search API:** Standardized the output format for all retrieval components (`BM25`, `Vector`, and `Hybrid`). Every search result now consistently includes `id`, `text`, `score`, and a full `metadata` dictionary.
+- **Enhanced Traceability:** By preserving metadata throughout the hybrid retrieval pipeline, the `Orchestrator` and individual agents can now accurately cite legal articles and provide more context-aware compliance reports. This fix resolves errors that occurred when attempting to access metadata from BM25-ranked results.
+

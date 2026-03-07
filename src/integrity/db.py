@@ -71,6 +71,18 @@ class ArticleDB:
             return None
         return {"sha256": row["sha256"], "updated_at": row["updated_at"]}
 
+    def find_by_law(self, law_name: str, article_number: str) -> dict | None:
+        """law_name + article_number로 sha256·updated_at 조회. 없으면 None."""
+        cur = self._conn.execute(
+            "SELECT article_id, sha256, updated_at FROM article_hashes "
+            "WHERE article_id LIKE ? ORDER BY updated_at DESC LIMIT 1",
+            (f"%{law_name}%{article_number}%",),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return {"sha256": row["sha256"], "updated_at": row["updated_at"]}
+
     def get_history(self, article_id: str) -> list[dict]:
         cur = self._conn.execute(
             "SELECT sha256, recorded_at FROM article_history WHERE article_id = ? ORDER BY id",
