@@ -3,6 +3,7 @@
 > **TDD 사이클**: Red (실패 테스트 작성) → Green (최소 구현) → Refactor
 > 체크박스: `- [x]` 완료 / `- [ ]` 미완료
 > 각 모듈은 **테스트 파일 먼저** 작성 후 구현합니다.
+> **테스트 주석 기준**: 모듈 docstring에 테스트 전략 설명, 각 테스트 함수에 1줄 docstring 필수
 
 ---
 
@@ -14,6 +15,7 @@
 - [x] `.env.example` 작성 (`OPENAI_API_KEY`, `QDRANT_URL`, `REDIS_URL`, `LAW_API_KEY`)
 - [x] `.gitignore` 작성
 - [x] `tests/conftest.py` 작성 (공통 픽스처: mock LLM, mock Qdrant, mock Redis)
+- [x] 전체 테스트 파일 주석 보강 (모듈 docstring 테스트 전략 + 각 테스트 함수 1줄 docstring)
 
 ---
 
@@ -115,31 +117,31 @@
 ## 5. 입력 처리 (`src/input/`)
 
 ### 5-1. file_loader.py
-- [ ] **[Red]** `tests/input/test_file_loader.py` 작성 (tmp_path 픽스처)
-  - [ ] `.py` 파일 로드 테스트
-  - [ ] `.html` 파일 로드 테스트
-  - [ ] `.js` / `.css` 파일 로드 테스트
-  - [ ] 존재하지 않는 경로 예외 테스트
-  - [ ] 미지원 확장자 예외 테스트
-- [ ] **[Green]** `src/input/file_loader.py` 구현
-- [ ] **[Refactor]** 확장자별 인코딩 처리
+- [x] **[Red]** `tests/input/test_file_loader.py` 작성 (tmp_path 픽스처)
+  - [x] `.py` 파일 로드 테스트
+  - [x] `.html` 파일 로드 테스트
+  - [x] `.js` / `.css` 파일 로드 테스트
+  - [x] 존재하지 않는 경로 예외 테스트
+  - [x] 미지원 확장자 예외 테스트
+- [x] **[Green]** `src/input/file_loader.py` 구현
+- [x] **[Refactor]** 확장자별 인코딩 처리
 
 ### 5-2. url_parser.py
-- [ ] **[Red]** `tests/input/test_url_parser.py` 작성 (responses mock)
-  - [ ] HTML 파싱 + JS/CSS/meta 태그 추출 테스트
-  - [ ] 잘못된 URL 예외 테스트
-  - [ ] 타임아웃 처리 테스트
-- [ ] **[Green]** `src/input/url_parser.py` 구현 (requests + BeautifulSoup4)
-- [ ] **[Refactor]** 상대 경로 → 절대 URL 변환
+- [x] **[Red]** `tests/input/test_url_parser.py` 작성 (responses mock)
+  - [x] HTML 파싱 + JS/CSS/meta 태그 추출 테스트
+  - [x] 잘못된 URL 예외 테스트
+  - [x] 타임아웃 처리 테스트
+- [x] **[Green]** `src/input/url_parser.py` 구현 (requests + BeautifulSoup4)
+- [x] **[Refactor]** 상대 경로 → 절대 URL 변환
 
 ### 5-3. token_splitter.py
-- [ ] **[Red]** `tests/input/test_token_splitter.py` 작성
-  - [ ] 한도 이내 텍스트 → 단일 청크 반환 테스트
-  - [ ] 한도 초과 텍스트 → 복수 청크 반환 테스트
-  - [ ] chunk_size = ctx_limit × 0.7 검증 테스트
-  - [ ] overlap = 200 토큰 검증 테스트
-- [ ] **[Green]** `src/input/token_splitter.py` 구현 (tiktoken)
-- [ ] **[Refactor]** 모델별 ctx_limit 매핑 테이블
+- [x] **[Red]** `tests/input/test_token_splitter.py` 작성
+  - [x] 한도 이내 텍스트 → 단일 청크 반환 테스트
+  - [x] 한도 초과 텍스트 → 복수 청크 반환 테스트
+  - [x] chunk_size = ctx_limit × 0.7 검증 테스트
+  - [x] overlap = 200 토큰 검증 테스트
+- [x] **[Green]** `src/input/token_splitter.py` 구현 (tiktoken)
+- [x] **[Refactor]** 모델별 ctx_limit 매핑 테이블
 
 ---
 
@@ -314,9 +316,9 @@
 | collector/scheduler | **완료** | **완료** | **완료** |
 | embedder/chunker | **완료** | **완료** | **완료** |
 | embedder/indexer | **완료** | **완료** | **완료** |
-| input/file_loader | 미완료 | 미완료 | 미완료 |
-| input/url_parser | 미완료 | 미완료 | 미완료 |
-| input/token_splitter | 미완료 | 미완료 | 미완료 |
+| input/file_loader | **완료** | **완료** | **완료** |
+| input/url_parser | **완료** | **완료** | **완료** |
+| input/token_splitter | **완료** | **완료** | **완료** |
 | retrieval/cache | 미완료 | 미완료 | 미완료 |
 | retrieval/bm25 | 미완료 | 미완료 | 미완료 |
 | retrieval/vector | 미완료 | 미완료 | 미완료 |

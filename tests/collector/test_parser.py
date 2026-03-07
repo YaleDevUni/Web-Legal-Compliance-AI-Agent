@@ -1,4 +1,11 @@
-"""tests/collector/test_parser.py — law.go.kr XML 파서 TDD"""
+"""tests/collector/test_parser.py — law.go.kr XML 파서 TDD
+
+테스트 전략:
+- SAMPLE_XML: 정상 2개 조항 포함 응답
+- MISSING_FIELD_XML: 시행일자 누락 → 기본값으로 파싱 계속
+- EMPTY_XML: 조문 없음 → 빈 리스트 반환
+- sha256은 조문내용 텍스트로 직접 계산한 값과 일치해야 함
+"""
 import pytest
 
 
@@ -55,11 +62,13 @@ EMPTY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 class TestLawParser:
     def test_parse_returns_law_articles(self):
+        """정상 XML → 조문 수(2개)만큼 LawArticle 반환"""
         from collector.parser import parse_law_xml
         articles = parse_law_xml(SAMPLE_XML)
         assert len(articles) == 2
 
     def test_article_fields_populated(self):
+        """파싱된 조항의 law_name, article_number, content, sha256 필드 검증"""
         from collector.parser import parse_law_xml
         articles = parse_law_xml(SAMPLE_XML)
         a = articles[0]
@@ -70,24 +79,26 @@ class TestLawParser:
         assert a.article_id != ""
 
     def test_article_id_format(self):
+        """article_id = {법령ID}_{조문번호} 형식 (예: PA_3, PA_17)"""
         from collector.parser import parse_law_xml
         articles = parse_law_xml(SAMPLE_XML)
-        # article_id = 법령ID_조문번호 형태여야 함
         assert articles[0].article_id == "PA_3"
         assert articles[1].article_id == "PA_17"
 
     def test_missing_field_handled_gracefully(self):
+        """시행일자 누락 시 updated_at 기본값 사용, 파싱 중단 없음"""
         from collector.parser import parse_law_xml
-        # 시행일자 누락 → updated_at 기본값 사용, 파싱 계속
         articles = parse_law_xml(MISSING_FIELD_XML)
         assert len(articles) == 1
 
     def test_empty_articles_returns_empty_list(self):
+        """조문이 없는 XML → 빈 리스트 반환"""
         from collector.parser import parse_law_xml
         articles = parse_law_xml(EMPTY_XML)
         assert articles == []
 
     def test_sha256_computed_from_content(self):
+        """조항의 sha256은 content 텍스트로 직접 계산한 값과 동일해야 함"""
         from collector.parser import parse_law_xml
         from integrity.hasher import compute_sha256
         articles = parse_law_xml(SAMPLE_XML)

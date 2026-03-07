@@ -1,4 +1,11 @@
-"""tests/core/test_models.py — LawArticle, Citation, ComplianceReport TDD"""
+"""tests/core/test_models.py — LawArticle, Citation, ComplianceReport TDD
+
+테스트 전략:
+- Pydantic ValidationError 발생 여부로 유효성 검증 확인
+- LawArticle: article_id 필수, sha256 64자 hex, content 비어있으면 안 됨, url 유효해야 함
+- Citation: short_sha(앞 8자), format() → "[법령명 조항 · sha:xxxx · 날짜]" 포맷 검증
+- ComplianceReport: COMPLIANT/VIOLATION enum, citations 최소 1개 필수
+"""
 import pytest
 from datetime import datetime
 from pydantic import ValidationError
@@ -8,6 +15,7 @@ from pydantic import ValidationError
 
 class TestLawArticle:
     def test_valid_law_article(self):
+        """모든 필드가 유효할 때 객체 정상 생성"""
         from core.models import LawArticle
         article = LawArticle(
             article_id="PA_001_0030",
@@ -24,6 +32,7 @@ class TestLawArticle:
         assert article.sha256 == "a3f2c1d4e5b678901234567890abcdef1234567890abcdef1234567890abcdef"
 
     def test_missing_required_field_raises(self):
+        """article_id 누락 시 ValidationError 발생"""
         from core.models import LawArticle
         with pytest.raises(ValidationError):
             LawArticle(
@@ -35,6 +44,7 @@ class TestLawArticle:
             )  # article_id 누락
 
     def test_sha256_must_be_64_hex_chars(self):
+        """sha256에 64자 hex가 아닌 값 입력 시 ValidationError 발생"""
         from core.models import LawArticle
         with pytest.raises(ValidationError):
             LawArticle(
@@ -48,6 +58,7 @@ class TestLawArticle:
             )
 
     def test_url_must_be_valid(self):
+        """유효하지 않은 URL 입력 시 ValidationError 발생"""
         from core.models import LawArticle
         with pytest.raises(ValidationError):
             LawArticle(
@@ -61,6 +72,7 @@ class TestLawArticle:
             )
 
     def test_content_must_not_be_empty(self):
+        """빈 문자열 content 입력 시 ValidationError 발생"""
         from core.models import LawArticle
         with pytest.raises(ValidationError):
             LawArticle(
@@ -78,6 +90,7 @@ class TestLawArticle:
 
 class TestCitation:
     def test_valid_citation(self):
+        """유효한 Citation 객체 생성 확인"""
         from core.models import Citation
         citation = Citation(
             law_name="개인정보 보호법",
@@ -90,6 +103,7 @@ class TestCitation:
         assert citation.article_number == "제17조"
 
     def test_citation_short_sha_property(self):
+        """short_sha 프로퍼티가 sha256 앞 8자를 반환하는지 확인"""
         from core.models import Citation
         sha = "a3f2c1d4" + "e" * 56
         citation = Citation(
@@ -102,6 +116,7 @@ class TestCitation:
         assert citation.short_sha == sha[:8]
 
     def test_citation_format_string(self):
+        """format() → [법령명 조항 · sha:xxxx · 날짜] 포맷 검증"""
         from core.models import Citation
         sha = "a3f2c1d4" + "e" * 56
         citation = Citation(
@@ -132,6 +147,7 @@ class TestComplianceReport:
         )
 
     def test_compliant_report(self):
+        """COMPLIANT 상태: is_compliant=True, is_violation=False"""
         from core.models import ComplianceReport, ComplianceStatus
         report = ComplianceReport(
             status=ComplianceStatus.COMPLIANT,
@@ -143,6 +159,7 @@ class TestComplianceReport:
         assert report.is_violation is False
 
     def test_violation_report(self):
+        """VIOLATION 상태: is_violation=True, is_compliant=False"""
         from core.models import ComplianceReport, ComplianceStatus
         report = ComplianceReport(
             status=ComplianceStatus.VIOLATION,
@@ -155,6 +172,7 @@ class TestComplianceReport:
         assert report.is_compliant is False
 
     def test_report_requires_at_least_one_citation(self):
+        """citations=[] → ValidationError (min_length=1 제약)"""
         from core.models import ComplianceReport, ComplianceStatus
         with pytest.raises(ValidationError):
             ComplianceReport(

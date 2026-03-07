@@ -1,4 +1,10 @@
-"""tests/embedder/test_indexer.py — Qdrant 색인 TDD (mock)"""
+"""tests/embedder/test_indexer.py — Qdrant 색인 TDD (mock)
+
+테스트 전략:
+- conftest.py의 mock_qdrant 픽스처로 실제 Qdrant 없이 테스트
+- OpenAIEmbeddings도 mocker.patch로 대체 (실제 API 호출 없음)
+- changed_ids=None → 전체 색인, changed_ids=set() → 스킵, changed_ids={"PA_3"} → 해당만 색인
+"""
 import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, call
@@ -28,16 +34,19 @@ def indexer(mock_qdrant, mocker):
 
 class TestArticleIndexer:
     def test_collection_created_if_not_exists(self, indexer, mock_qdrant):
+        """컬렉션 미존재 시 create_collection 자동 호출"""
         mock_qdrant.collection_exists.return_value = False
         indexer._ensure_collection()
         mock_qdrant.create_collection.assert_called_once()
 
     def test_collection_not_recreated_if_exists(self, indexer, mock_qdrant):
+        """컬렉션 이미 존재 시 create_collection 미호출"""
         mock_qdrant.collection_exists.return_value = True
         indexer._ensure_collection()
         mock_qdrant.create_collection.assert_not_called()
 
     def test_upsert_calls_qdrant(self, indexer, mock_qdrant, article, mocker):
+        """changed_ids 미지정(전체 색인) → qdrant.upsert 1회 호출"""
         mocker.patch.object(indexer, "_embed", return_value=[[0.1] * 1536])
         mock_qdrant.collection_exists.return_value = True
         indexer.upsert([article])
