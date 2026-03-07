@@ -64,30 +64,30 @@
 ## 3. 법령 수집 (`src/collector/`)
 
 ### 3-1. parser.py
-- [ ] **[Red]** `tests/collector/test_parser.py` 작성
-  - [ ] 정상 XML 응답 → `LawArticle` 리스트 변환 테스트
-  - [ ] 필드 누락 응답 처리 테스트
-  - [ ] 빈 응답 처리 테스트
-- [ ] **[Green]** `src/collector/parser.py` 구현
-- [ ] **[Refactor]** 파싱 오류 로깅 추가
+- [x] **[Red]** `tests/collector/test_parser.py` 작성
+  - [x] 정상 XML 응답 → `LawArticle` 리스트 변환 테스트
+  - [x] 필드 누락 응답 처리 테스트
+  - [x] 빈 응답 처리 테스트
+- [x] **[Green]** `src/collector/parser.py` 구현
+- [x] **[Refactor]** 파싱 오류 로깅 추가
 
 ### 3-2. law_api.py
-- [ ] **[Red]** `tests/collector/test_law_api.py` 작성 (requests mock)
-  - [ ] API 정상 호출 테스트 (7개 법령 각각)
-  - [ ] 네트워크 오류 재시도 테스트
-  - [ ] API 키 누락 시 예외 테스트
-- [ ] **[Green]** `src/collector/law_api.py` 구현 (law.go.kr Open API)
-  - [ ] 개인정보보호법, 정보통신망법, 위치정보법
-  - [ ] 안전성 확보 조치 기준
-  - [ ] 전자상거래법, 청소년보호법, 신용정보법
-- [ ] **[Refactor]** rate limit 처리, 지수 백오프 재시도
+- [x] **[Red]** `tests/collector/test_law_api.py` 작성 (requests mock)
+  - [x] API 정상 호출 테스트 (7개 법령 각각)
+  - [x] 네트워크 오류 재시도 테스트
+  - [x] API 키 누락 시 예외 테스트
+- [x] **[Green]** `src/collector/law_api.py` 구현 (law.go.kr Open API)
+  - [x] 개인정보보호법, 정보통신망법, 위치정보법
+  - [x] 안전성 확보 조치 기준
+  - [x] 전자상거래법, 청소년보호법, 신용정보법
+- [x] **[Refactor]** rate limit 처리, 지수 백오프 재시도
 
 ### 3-3. scheduler.py
-- [ ] **[Red]** `tests/collector/test_scheduler.py` 작성 (APScheduler mock)
-  - [ ] 스케줄 등록 테스트
-  - [ ] 수집 → SHA 비교 → 재임베딩 흐름 테스트
-- [ ] **[Green]** `src/collector/scheduler.py` 구현
-- [ ] **[Refactor]** 스케줄 주기 config화
+- [x] **[Red]** `tests/collector/test_scheduler.py` 작성 (APScheduler mock)
+  - [x] 스케줄 등록 테스트
+  - [x] 수집 → SHA 비교 → 재임베딩 흐름 테스트
+- [x] **[Green]** `src/collector/scheduler.py` 구현
+- [x] **[Refactor]** 스케줄 주기 config화
 
 ---
 
@@ -309,9 +309,9 @@
 | core/config | **완료** | **완료** | **완료** |
 | integrity/hasher | **완료** | **완료** | **완료** |
 | integrity/db | **완료** | **완료** | **완료** |
-| collector/parser | 미완료 | 미완료 | 미완료 |
-| collector/law_api | 미완료 | 미완료 | 미완료 |
-| collector/scheduler | 미완료 | 미완료 | 미완료 |
+| collector/parser | **완료** | **완료** | **완료** |
+| collector/law_api | **완료** | **완료** | **완료** |
+| collector/scheduler | **완료** | **완료** | **완료** |
 | embedder/chunker | 미완료 | 미완료 | 미완료 |
 | embedder/indexer | 미완료 | 미완료 | 미완료 |
 | input/file_loader | 미완료 | 미완료 | 미완료 |
