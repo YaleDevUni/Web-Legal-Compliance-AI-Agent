@@ -22,6 +22,7 @@ from collector.parser import parse_law_html
 from core.config import Settings
 from integrity.db import ArticleDB
 from embedder.indexer import ArticleIndexer
+from core.logger import logger # Added import
 
 # 파일명 → article_id 접두사 매핑
 LAW_PREFIX_MAP: dict[str, str] = {
@@ -37,32 +38,55 @@ LAW_PREFIX_MAP: dict[str, str] = {
 LAWS_DIR = Path(__file__).parent.parent / "data" / "laws"
 
 
-def load_html_laws() -> None:
+def load_html_laws(force_reindex: bool = False) -> None: # Added parameter
     """data/laws/*.html을 파싱해 SHA 비교 후 변경분만 벡터 색인."""
     settings = Settings()
     db = ArticleDB()
     qdrant = QdrantClient(url=str(settings.qdrant_url))
     indexer = ArticleIndexer(qdrant_client=qdrant, collection=settings.qdrant_collection)
 
+    if force_reindex: # Added force_reindex logic
+        logger.info("--- Vector DB 초기화 및 전체 재색인 시작 (로컬 HTML) ---")
+        indexer.recreate_collection()
+    
+    all_articles_from_files: list[LawArticle] = []
+    
     total_parsed = 0
-    total_changed = 0
-
+    
     for fname, prefix in LAW_PREFIX_MAP.items():
         path = LAWS_DIR / fname
         if not path.exists():
-            print(f"[SKIP] {fname} — 파일 없음")
+            logger.warning(f"[SKIP] {fname} — 파일 없음")
             continue
 
         html = path.read_text(encoding="utf-8", errors="replace")
         articles = parse_law_html(html, law_id_prefix=prefix)
+        all_articles_from_files.extend(articles)
 
         if not articles:
-            print(f"[WARN] {fname} — 조문 0개 (파일 확인 필요)")
+            logger.warning(f"[WARN] {fname} — 조문 0개 (파일 확인 필요)")
             continue
+        total_parsed += len(articles)
 
-        # SHA 비교 → 변경된 article_id 수집
+    # Now, process all articles (either for full reindex or incremental update)
+    all_article_ids_from_files = {a.article_id for a in all_articles_from_files}
+    
+    if force_reindex:
+        # If forced, reindex all
+        logger.info(f"로컬 HTML에서 총 {len(all_articles_from_files)}개의 조항을 재색인합니다.")
+        indexer.upsert(all_articles_from_files, changed_ids=all_article_ids_from_files)
+        # Update local DB for all
+        for article in all_articles_from_files:
+            db.upsert(
+                article_id=article.article_id,
+                sha256=article.sha256,
+                updated_at=article.updated_at,
+            )
+        total_changed = len(all_articles_from_files)
+    else:
+        # Original SHA comparison logic
         changed_ids: set[str] = set()
-        for article in articles:
+        for article in all_articles_from_files:
             changed = db.upsert(
                 article_id=article.article_id,
                 sha256=article.sha256,
@@ -71,16 +95,17 @@ def load_html_laws() -> None:
             if changed:
                 changed_ids.add(article.article_id)
 
-        # 변경분만 색인
         if changed_ids:
-            indexer.upsert(articles, changed_ids=changed_ids)
-
-        total_parsed += len(articles)
-        total_changed += len(changed_ids)
-        print(f"[OK]   {fname:30s}  {prefix}  {len(articles):3d}개 조문  |  변경 {len(changed_ids):3d}개 색인")
-
-    print(f"\n완료 — 총 {total_parsed}개 조문 파싱, {total_changed}개 변경분 색인")
+            indexer.upsert(all_articles_from_files, changed_ids=changed_ids)
+        total_changed = len(changed_ids)
+        
+    logger.info(f"\n완료 — 총 {total_parsed}개 조문 파싱, {total_changed}개 변경분/전체 색인")
 
 
 if __name__ == "__main__":
-    load_html_laws()
+    from core.logger import logger # Added import
+    load_dotenv(Path(__file__).parent.parent / ".env") # Ensure dotenv is loaded here too for direct script execution
+    
+    logger.info("--- 로컬 HTML 법령 파일 색인 시작 ---")
+    load_html_laws(force_reindex=True) # Call with force_reindex=True
+    logger.info("--- 로컬 HTML 법령 파일 색인 완료 ---")

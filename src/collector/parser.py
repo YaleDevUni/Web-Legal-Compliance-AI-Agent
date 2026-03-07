@@ -141,8 +141,8 @@ def parse_law_html(
         for sfon in pgroup.find_all("span", class_="sfon"):
             sfon.decompose()
 
-        content = " ".join(
-            p.get_text(separator=" ", strip=True)
+        content = "\n".join(
+            p.get_text(strip=True)
             for p in pgroup.find_all("p")
             if p.get_text(strip=True)
         ).strip()

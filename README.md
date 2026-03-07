@@ -39,3 +39,14 @@ To prevent loss of relevant context, the system now aggregates multiple text chu
 
 - Previously, if the retriever found several relevant chunks from the same article, only the first one was used, and the rest were discarded.
 - The context-building logic has been updated to group all chunks by their article ID and concatenate their text, ensuring all retrieved information is passed to the LLM for a more thorough analysis.
+
+### 6. Semantic Chunking for Legal Texts
+
+A significant improvement has been made to how legal documents are processed and indexed.
+
+- **Problem:** The previous generic character-based chunking strategy often split legal articles in ways that separated important contextual information (e.g., article titles from their content), leading to retrieval failures.
+- **Solution:** The system now employs a semantic chunking approach:
+    - The HTML parser (`src/collector/parser.py`) was modified to preserve the natural paragraph breaks in the legal text.
+    - The chunking logic (`src/embedder/chunker.py`) now splits articles based on these semantic units (paragraphs/sections).
+    - Crucially, the full article title (e.g., "개인정보 보호법 제23조(민감정보의 처리 제한)") is **prepended to every chunk** derived from that article. This ensures that even small chunks carry their essential legal context, drastically improving retrieval accuracy.
+- **Impact:** This change is expected to significantly enhance the retriever's ability to find highly relevant legal articles, such as `PA_23` for sensitive information, thereby improving the overall quality and accuracy of the compliance analysis.
