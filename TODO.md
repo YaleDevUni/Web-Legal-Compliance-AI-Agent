@@ -278,20 +278,19 @@
 
 ## 11. Streamlit UI (`app.py`)
 
-- [ ] 입력 폼 (파일 경로 / URL / 자연어 질문 탭)
-- [ ] 분석 실행 버튼
-- [ ] `st.write_stream()` 실시간 스트리밍 응답 패널
-- [ ] 준수 항목(✅) / 보완 항목(⚠️) 구분 출력
-- [ ] Citation 카드 (SHA 앞 8자 + 원문 링크)
-- [ ] 개정 감지 뱃지 (hash_prev ≠ hash_curr 시 🔔)
+- [x] 입력 폼 (파일 업로드 / URL / 코드 직접 입력 탭)
+- [x] 분석 실행 버튼
+- [x] 준수 항목(✅) / 보완 항목(⚠️) 구분 출력
+- [x] Citation 카드 (SHA 앞 8자 + 원문 링크)
+- [x] 위반 항목 권고사항 표시
 
 ---
 
 ## 12. 인프라 (`Docker`)
 
-- [ ] `Dockerfile` 작성 (uv 멀티스테이지 빌드)
-- [ ] `docker-compose.yml` 작성 (qdrant + redis + app)
-- [ ] `.dockerignore` 작성
+- [x] `Dockerfile` 작성 (uv 멀티스테이지 빌드)
+- [x] `docker-compose.yml` 작성 (qdrant + redis + app)
+- [x] `.dockerignore` 작성
 - [ ] `docker-compose up --build` 정상 기동 확인
 
 ---
@@ -327,5 +326,5 @@
 | streaming/redis_stream | **완료** | **완료** | **완료** |
 | scripts/setup_index | **완료** | **완료** | **완료** |
 | 통합 테스트 | 미완료 | - | - |
-| Streamlit UI | - | 미완료 | - |
-| Docker 인프라 | - | 미완료 | - |
+| Streamlit UI | - | **완료** | - |
+| Docker 인프라 | - | **완료** | - |
