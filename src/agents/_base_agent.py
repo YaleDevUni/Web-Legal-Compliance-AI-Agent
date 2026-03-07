@@ -26,19 +26,40 @@ _ARTICLE_NUM_RE = re.compile(r"(\d+(?:의\d+)?)")
 
 
 def _build_law_context(chunks: list[dict]) -> tuple[str, dict[str, dict]]:
-    """검색된 청크 → LLM 컨텍스트 문자열 + article_id별 metadata 인덱스."""
-    index: dict[str, dict] = {}
-    lines: list[str] = []
+    """검색된 청크 → LLM 컨텍스트 문자열 + article_id별 metadata 인덱스.
+    
+    동일 article_id를 가진 여러 청크의 텍스트를 하나로 합쳐 컨텍스트 손실을 방지.
+    """
+    grouped_chunks: dict[str, dict] = {}
     for chunk in chunks:
         meta = chunk.get("metadata", {})
         aid = meta.get("article_id", "")
-        if not aid or aid in index:
+        if not aid:
             continue
-        index[aid] = {**meta, "text": chunk.get("text", "")}
+
+        if aid not in grouped_chunks:
+            # 청크 리스트의 순서를 유지하기 위해 meta는 처음 나타난 것을 사용
+            grouped_chunks[aid] = {"meta": meta, "texts": []}
+        
+        # 중복 텍스트는 추가하지 않음
+        text_to_add = chunk.get("text", "")
+        if text_to_add not in grouped_chunks[aid]["texts"]:
+            grouped_chunks[aid]["texts"].append(text_to_add)
+
+    index: dict[str, dict] = {}
+    lines: list[str] = []
+    for aid, data in grouped_chunks.items():
+        meta = data["meta"]
+        # 여러 텍스트 청크를 줄바꿈으로 합침
+        full_text = "\n\n".join(data["texts"])
+        
+        # 최종적으로 index와 lines에 병합된 텍스트와 메타데이터 저장
+        index[aid] = {**meta, "text": full_text}
         lines.append(
             f"[{aid}] {meta.get('law_name', '')} {meta.get('article_number', '')}\n"
-            f"{chunk.get('text', '')}"
+            f"{full_text}"
         )
+        
     return "\n\n".join(lines), index
 
 

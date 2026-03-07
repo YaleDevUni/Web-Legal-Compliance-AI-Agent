@@ -31,3 +31,10 @@ The system can now identify and report multiple legal violations within a single
 
 - Previously, only one violation could be reported per analysis, even if the code contained several distinct legal breaches (e.g., general personal information collection, sensitive information collection, and unique identification number handling).
 - The LLM prompt and parsing logic have been updated to allow the AI to report all applicable violations, each as a separate compliance report, providing a more comprehensive and accurate analysis.
+
+### 5. Contextual Chunk Aggregation
+
+To prevent loss of relevant context, the system now aggregates multiple text chunks retrieved from the same legal article.
+
+- Previously, if the retriever found several relevant chunks from the same article, only the first one was used, and the rest were discarded.
+- The context-building logic has been updated to group all chunks by their article ID and concatenate their text, ensuring all retrieved information is passed to the LLM for a more thorough analysis.
