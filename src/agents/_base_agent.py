@@ -249,7 +249,7 @@ class BaseAgent:
             # (이 경우 LLM은 자신의 사전 지식으로만 답변 시도. 법규 준수 여부는 거의 판별 불가)
             prompt = f"{self._SYSTEM_PROMPT}\n\n코드:\n{code_text}"
         
-        logger.debug(f"[{agent_name}] 최종 프롬프트(일부): {prompt[:1000]}...")
+        logger.debug(f"[{agent_name}] 최종 프롬프트: {prompt}")
 
         # 4. LLM 호출
         response = self._llm.invoke([HumanMessage(content=prompt)])

@@ -23,7 +23,8 @@ The core RAG prompt has been made more flexible to handle situations where retri
 
 Detailed logging has been integrated into the agent pipeline to provide clear visibility into the system's internal operations.
 
-- The logs now show the exact query used by each agent, the `top_k` documents retrieved from the vector store (before and after filtering), and the final compliance status, making debugging and performance tuning significantly easier.
+- The logs now show the exact query used by each agent, the `top_k` documents retrieved from the vector store (before and after filtering), and the final compliance status.
+- The full LLM prompt sent for analysis is now logged (previously it was truncated for brevity), making debugging and prompt engineering easier.
 
 ### 4. Multi-Violation Reporting
 
