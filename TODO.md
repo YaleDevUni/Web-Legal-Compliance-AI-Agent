@@ -20,12 +20,12 @@
 ## 1. 핵심 공통 모듈 (`src/core/`)
 
 ### 1-1. models.py
-- [ ] **[Red]** `tests/core/test_models.py` 작성
-  - [ ] `LawArticle` 필드 검증 테스트 (article_id, law_name, content, sha256, url, updated_at)
-  - [ ] `Citation` 포맷 검증 테스트
-  - [ ] `ComplianceReport` 준수/위반 분류 테스트
-- [ ] **[Green]** `src/core/models.py` 구현 (Pydantic BaseModel)
-- [ ] **[Refactor]** 유효성 검사 validator 추가
+- [x] **[Red]** `tests/core/test_models.py` 작성
+  - [x] `LawArticle` 필드 검증 테스트 (article_id, law_name, content, sha256, url, updated_at)
+  - [x] `Citation` 포맷 검증 테스트
+  - [x] `ComplianceReport` 준수/위반 분류 테스트
+- [x] **[Green]** `src/core/models.py` 구현 (Pydantic BaseModel)
+- [x] **[Refactor]** 유효성 검사 validator 추가
 
 ### 1-2. config.py
 - [ ] **[Red]** `tests/core/test_config.py` 작성
@@ -305,7 +305,7 @@
 | 모듈 | 테스트 작성 | 구현 | 리팩터 |
 |------|------------|------|--------|
 | 프로젝트 초기 설정 | - | **완료** | - |
-| core/models | 미완료 | 미완료 | 미완료 |
+| core/models | **완료** | **완료** | **완료** |
 | core/config | 미완료 | 미완료 | 미완료 |
 | integrity/hasher | 미완료 | 미완료 | 미완료 |
 | integrity/db | 미완료 | 미완료 | 미완료 |
