@@ -81,38 +81,52 @@ def _parse_llm_response(
     content: str,
     chunk_index: dict[str, dict],
     code_text: str = "",
-) -> ComplianceReport | None:
-    """LLM 응답 파싱 → ComplianceReport.
+) -> list[ComplianceReport]: # Changed return type
+    """LLM 응답 파싱 → ComplianceReport 리스트.
 
     형식: status|description|article_id|code_snippet
+    LLM 응답은 여러 줄일 수 있으며, 각 줄이 하나의 보고서에 해당함.
     article_id로 chunk_index에서 실제 법령 metadata 조회.
     """
-    parts = [p.strip() for p in content.split("|", maxsplit=3)]
-    if len(parts) < 3:
-        return None
-    status_str, description, article_id = parts[:3]
-    code_snippet = parts[3] if len(parts) > 3 else ""
-    try:
-        status = ComplianceStatus(status_str.lower())
-    except ValueError:
-        return None
+    reports: list[ComplianceReport] = []
+    
+    # LLM 응답을 줄 단위로 분리하여 각 보고서 파싱
+    for line in content.strip().split("\n"):
+        parts = [p.strip() for p in line.split("|", maxsplit=3)]
+        if len(parts) < 3:
+            logger.warning(f"파싱 실패: LLM 응답 형식이 올바르지 않음 - '{line}'")
+            continue
+        
+        status_str, description, article_id = parts[:3]
+        code_snippet = parts[3] if len(parts) > 3 else ""
+        
+        try:
+            status = ComplianceStatus(status_str.lower())
+        except ValueError:
+            logger.warning(f"파싱 실패: 알 수 없는 상태 값 - '{status_str}' in '{line}'")
+            continue
 
-    meta = chunk_index.get(article_id)
-    if meta is None:
-        # chunk_index에 없으면 article_id에서 직접 법령 정보 구성 (fallback)
-        meta = {"article_id": article_id, "law_name": "", "article_number": "",
-                "sha256": _DEFAULT_SHA, "url": "https://www.law.go.kr/",
-                "updated_at": "2024-01-01T00:00:00", "text": ""}
+        meta = chunk_index.get(article_id)
+        if meta is None:
+            # chunk_index에 없으면 article_id에서 직접 법령 정보 구성 (fallback)
+            # UNKNOWN일 경우 빈 메타데이터로 처리
+            meta = {"article_id": article_id, "law_name": "", "article_number": "",
+                    "sha256": _DEFAULT_SHA, "url": "https://www.law.go.kr/",
+                    "updated_at": "2024-01-01T00:00:00", "text": ""}
 
-    citation = _make_citation_from_meta(meta)
-    source_location = _find_source_location(code_text, code_snippet) if code_snippet else None
-    return ComplianceReport(
-        status=status,
-        description=description,
-        citations=[citation],
-        recommendation=code_snippet,
-        source_location=source_location,
-    )
+        citation = _make_citation_from_meta(meta)
+        source_location = _find_source_location(code_text, code_snippet) if code_snippet else None
+        
+        reports.append(
+            ComplianceReport(
+                status=status,
+                description=description,
+                citations=[citation],
+                recommendation=code_snippet,
+                source_location=source_location,
+            )
+        )
+    return reports
 
 
 def _make_rag_instruction(available_ids: list[str]) -> str:
@@ -120,7 +134,7 @@ def _make_rag_instruction(available_ids: list[str]) -> str:
     return (
         f"위 [참고 법령] 목록에서 관련 조항을 선택하여 코드의 법령 준수 여부를 판단하세요. "
         f"사용 가능한 article_id 목록: [{ids_str}] — 이 목록 내에서 가장 적합한 article_id를 선택하여 주요 근거로 활용하십시오. 만약 제공된 법령만으로는 명확한 판단이 어렵거나, 관련성이 매우 낮아 보인다면, 당신의 지식을 활용하여 'compliant'로 응답하고, 이 경우에도 가장 근접한 article_id를 선택하거나 'UNKNOWN'으로 기입할 수 있습니다. "
-        "반드시 다음 형식으로만 응답하세요 (| 구분, 정확히 4개 필드): "
+        "코드에서 발견한 모든 법규 위반 사항을 개별적으로 보고해야 합니다. 각 위반 사항은 별도의 줄에 다음 형식으로 응답하세요 (| 구분, 정확히 4개 필드): " # Modified instruction
         "status|description|article_id|code_snippet "
         "판단 기준 (매우 중요): "
         "1) 코드에 위반 증거가 명확히 있을 때만 violation — 추측이나 가능성은 compliant. "
@@ -211,6 +225,7 @@ class BaseAgent:
             )
         else:
             # retriever 없거나 검색 결과 없을 때 fallback
+            # (이 경우 LLM은 자신의 사전 지식으로만 답변 시도. 법규 준수 여부는 거의 판별 불가)
             prompt = f"{self._SYSTEM_PROMPT}\n\n코드:\n{code_text}"
         
         logger.debug(f"[{agent_name}] 최종 프롬프트(일부): {prompt[:1000]}...")
@@ -219,6 +234,6 @@ class BaseAgent:
         response = self._llm.invoke([HumanMessage(content=prompt)])
 
         # 5. 파싱
-        report = _parse_llm_response(response.content, chunk_index, code_text)
-        logger.info(f"[{agent_name}] 분석 완료: status={report.status.value if report else 'N/A'}")
-        return [report] if report else []
+        reports = _parse_llm_response(response.content, chunk_index, code_text) # Changed variable name
+        logger.info(f"[{agent_name}] 분석 완료: {len(reports)}개의 보고서 생성됨") # Changed log message
+        return reports # Return the list of reports

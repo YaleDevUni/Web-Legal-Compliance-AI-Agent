@@ -24,3 +24,10 @@ The core RAG prompt has been made more flexible to handle situations where retri
 Detailed logging has been integrated into the agent pipeline to provide clear visibility into the system's internal operations.
 
 - The logs now show the exact query used by each agent, the `top_k` documents retrieved from the vector store (before and after filtering), and the final compliance status, making debugging and performance tuning significantly easier.
+
+### 4. Multi-Violation Reporting
+
+The system can now identify and report multiple legal violations within a single code snippet.
+
+- Previously, only one violation could be reported per analysis, even if the code contained several distinct legal breaches (e.g., general personal information collection, sensitive information collection, and unique identification number handling).
+- The LLM prompt and parsing logic have been updated to allow the AI to report all applicable violations, each as a separate compliance report, providing a more comprehensive and accurate analysis.
