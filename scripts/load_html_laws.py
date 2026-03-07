@@ -11,12 +11,17 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from qdrant_client import QdrantClient
+
 from collector.parser import parse_law_html
+from core.config import Settings
 from integrity.db import ArticleDB
 from embedder.indexer import ArticleIndexer
-from scripts.setup_index import run_setup_index
 
 # 파일명 → article_id 접두사 매핑
 LAW_PREFIX_MAP: dict[str, str] = {
@@ -34,8 +39,10 @@ LAWS_DIR = Path(__file__).parent.parent / "data" / "laws"
 
 def load_html_laws() -> None:
     """data/laws/*.html을 파싱해 SHA 비교 후 변경분만 벡터 색인."""
+    settings = Settings()
     db = ArticleDB()
-    indexer = ArticleIndexer()
+    qdrant = QdrantClient(url=str(settings.qdrant_url))
+    indexer = ArticleIndexer(qdrant_client=qdrant, collection=settings.qdrant_collection)
 
     total_parsed = 0
     total_changed = 0
