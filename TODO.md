@@ -1,0 +1,335 @@
+# Web Legal Compliance AI Agent — TDD 구현 TODO
+
+> **TDD 사이클**: Red (실패 테스트 작성) → Green (최소 구현) → Refactor
+> 체크박스: `- [x]` 완료 / `- [ ]` 미완료
+> 각 모듈은 **테스트 파일 먼저** 작성 후 구현합니다.
+
+---
+
+## 0. 프로젝트 초기 설정
+
+- [x] 폴더 구조 생성 (`src/`, `scripts/`, `data/`, `tests/`)
+- [x] `pyproject.toml` 작성 (의존성 + pytest, pytest-asyncio, pytest-mock 포함)
+- [x] `uv sync` 실행 및 `uv.lock` 생성
+- [x] `.env.example` 작성 (`OPENAI_API_KEY`, `QDRANT_URL`, `REDIS_URL`, `LAW_API_KEY`)
+- [x] `.gitignore` 작성
+- [x] `tests/conftest.py` 작성 (공통 픽스처: mock LLM, mock Qdrant, mock Redis)
+
+---
+
+## 1. 핵심 공통 모듈 (`src/core/`)
+
+### 1-1. models.py
+- [ ] **[Red]** `tests/core/test_models.py` 작성
+  - [ ] `LawArticle` 필드 검증 테스트 (article_id, law_name, content, sha256, url, updated_at)
+  - [ ] `Citation` 포맷 검증 테스트
+  - [ ] `ComplianceReport` 준수/위반 분류 테스트
+- [ ] **[Green]** `src/core/models.py` 구현 (Pydantic BaseModel)
+- [ ] **[Refactor]** 유효성 검사 validator 추가
+
+### 1-2. config.py
+- [ ] **[Red]** `tests/core/test_config.py` 작성
+  - [ ] 환경변수 누락 시 예외 발생 테스트
+  - [ ] 기본값 설정 테스트
+- [ ] **[Green]** `src/core/config.py` 구현 (pydantic BaseSettings)
+- [ ] **[Refactor]** 환경별 설정 분리 (dev / prod)
+
+### 1-3. logger.py
+- [ ] **[Green]** `src/core/logger.py` 구현 (loguru, 테스트 불필요)
+
+---
+
+## 2. SHA-256 무결성 관리 (`src/integrity/`)
+
+### 2-1. hasher.py
+- [ ] **[Red]** `tests/integrity/test_hasher.py` 작성
+  - [ ] 동일 텍스트 → 동일 해시 테스트
+  - [ ] 다른 텍스트 → 다른 해시 테스트
+  - [ ] 빈 문자열 해시 테스트
+- [ ] **[Green]** `src/integrity/hasher.py` 구현 (hashlib.sha256)
+- [ ] **[Refactor]** 인코딩 처리 통일
+
+### 2-2. db.py
+- [ ] **[Red]** `tests/integrity/test_db.py` 작성 (SQLite in-memory)
+  - [ ] 테이블 생성 테스트
+  - [ ] 신규 조항 INSERT 테스트
+  - [ ] 해시 변경 감지 테스트 (hash_curr ≠ hash_prev → True 반환)
+  - [ ] 해시 동일 시 스킵 테스트 (→ False 반환)
+  - [ ] 이력 조회 테스트
+- [ ] **[Green]** `src/integrity/db.py` 구현 (SQLite CRUD)
+- [ ] **[Refactor]** 트랜잭션 처리 및 예외 핸들링
+
+---
+
+## 3. 법령 수집 (`src/collector/`)
+
+### 3-1. parser.py
+- [ ] **[Red]** `tests/collector/test_parser.py` 작성
+  - [ ] 정상 XML 응답 → `LawArticle` 리스트 변환 테스트
+  - [ ] 필드 누락 응답 처리 테스트
+  - [ ] 빈 응답 처리 테스트
+- [ ] **[Green]** `src/collector/parser.py` 구현
+- [ ] **[Refactor]** 파싱 오류 로깅 추가
+
+### 3-2. law_api.py
+- [ ] **[Red]** `tests/collector/test_law_api.py` 작성 (requests mock)
+  - [ ] API 정상 호출 테스트 (7개 법령 각각)
+  - [ ] 네트워크 오류 재시도 테스트
+  - [ ] API 키 누락 시 예외 테스트
+- [ ] **[Green]** `src/collector/law_api.py` 구현 (law.go.kr Open API)
+  - [ ] 개인정보보호법, 정보통신망법, 위치정보법
+  - [ ] 안전성 확보 조치 기준
+  - [ ] 전자상거래법, 청소년보호법, 신용정보법
+- [ ] **[Refactor]** rate limit 처리, 지수 백오프 재시도
+
+### 3-3. scheduler.py
+- [ ] **[Red]** `tests/collector/test_scheduler.py` 작성 (APScheduler mock)
+  - [ ] 스케줄 등록 테스트
+  - [ ] 수집 → SHA 비교 → 재임베딩 흐름 테스트
+- [ ] **[Green]** `src/collector/scheduler.py` 구현
+- [ ] **[Refactor]** 스케줄 주기 config화
+
+---
+
+## 4. 임베딩 & 색인 (`src/embedder/`)
+
+### 4-1. chunker.py
+- [ ] **[Red]** `tests/embedder/test_chunker.py` 작성
+  - [ ] chunk_size 이하 텍스트 → 단일 청크 테스트
+  - [ ] chunk_size 초과 텍스트 → 복수 청크 + overlap 테스트
+  - [ ] 메타데이터 보존 테스트 (article_id, sha 등)
+- [ ] **[Green]** `src/embedder/chunker.py` 구현 (RecursiveCharacterTextSplitter)
+- [ ] **[Refactor]** 법령 조항 구분자 우선 분할
+
+### 4-2. indexer.py
+- [ ] **[Red]** `tests/embedder/test_indexer.py` 작성 (Qdrant mock)
+  - [ ] 신규 조항 upsert 테스트
+  - [ ] 변경된 조항만 재임베딩 테스트
+  - [ ] 변경 없는 조항 스킵 테스트
+  - [ ] 컬렉션 없으면 자동 생성 테스트
+- [ ] **[Green]** `src/embedder/indexer.py` 구현 (qdrant-client)
+- [ ] **[Refactor]** 배치 upsert로 성능 최적화
+
+---
+
+## 5. 입력 처리 (`src/input/`)
+
+### 5-1. file_loader.py
+- [ ] **[Red]** `tests/input/test_file_loader.py` 작성 (tmp_path 픽스처)
+  - [ ] `.py` 파일 로드 테스트
+  - [ ] `.html` 파일 로드 테스트
+  - [ ] `.js` / `.css` 파일 로드 테스트
+  - [ ] 존재하지 않는 경로 예외 테스트
+  - [ ] 미지원 확장자 예외 테스트
+- [ ] **[Green]** `src/input/file_loader.py` 구현
+- [ ] **[Refactor]** 확장자별 인코딩 처리
+
+### 5-2. url_parser.py
+- [ ] **[Red]** `tests/input/test_url_parser.py` 작성 (responses mock)
+  - [ ] HTML 파싱 + JS/CSS/meta 태그 추출 테스트
+  - [ ] 잘못된 URL 예외 테스트
+  - [ ] 타임아웃 처리 테스트
+- [ ] **[Green]** `src/input/url_parser.py` 구현 (requests + BeautifulSoup4)
+- [ ] **[Refactor]** 상대 경로 → 절대 URL 변환
+
+### 5-3. token_splitter.py
+- [ ] **[Red]** `tests/input/test_token_splitter.py` 작성
+  - [ ] 한도 이내 텍스트 → 단일 청크 반환 테스트
+  - [ ] 한도 초과 텍스트 → 복수 청크 반환 테스트
+  - [ ] chunk_size = ctx_limit × 0.7 검증 테스트
+  - [ ] overlap = 200 토큰 검증 테스트
+- [ ] **[Green]** `src/input/token_splitter.py` 구현 (tiktoken)
+- [ ] **[Refactor]** 모델별 ctx_limit 매핑 테이블
+
+---
+
+## 6. 검색 레이어 (`src/retrieval/`)
+
+### 6-1. cache.py
+- [ ] **[Red]** `tests/retrieval/test_cache.py` 작성 (Redis mock)
+  - [ ] cosine ≥ 0.95 → 캐시 히트 반환 테스트
+  - [ ] cosine < 0.95 → 캐시 미스 테스트
+  - [ ] TTL 1시간 설정 검증 테스트
+  - [ ] 캐시 저장 테스트
+- [ ] **[Green]** `src/retrieval/cache.py` 구현 (redis-py)
+- [ ] **[Refactor]** 직렬화 방식 통일 (JSON)
+
+### 6-2. bm25.py
+- [ ] **[Red]** `tests/retrieval/test_bm25.py` 작성
+  - [ ] 조항 번호 정확 매칭 테스트 (e.g. "제17조")
+  - [ ] 법률 용어 매칭 테스트
+  - [ ] 빈 코퍼스 예외 테스트
+- [ ] **[Green]** `src/retrieval/bm25.py` 구현 (rank-bm25)
+- [ ] **[Refactor]** 형태소 분석기 연동 (선택)
+
+### 6-3. vector.py
+- [ ] **[Red]** `tests/retrieval/test_vector.py` 작성 (Qdrant mock)
+  - [ ] 쿼리 임베딩 생성 테스트
+  - [ ] Qdrant 검색 결과 반환 테스트
+  - [ ] payload 필터 적용 테스트
+- [ ] **[Green]** `src/retrieval/vector.py` 구현 (text-embedding-3-small + qdrant-client)
+- [ ] **[Refactor]** 배치 임베딩 처리
+
+### 6-4. rrf.py
+- [ ] **[Red]** `tests/retrieval/test_rrf.py` 작성
+  - [ ] BM25 + Vector 결과 융합 점수 계산 테스트
+  - [ ] 중복 문서 통합 테스트
+  - [ ] 결과 내림차순 정렬 테스트
+- [ ] **[Green]** `src/retrieval/rrf.py` 구현 (Reciprocal Rank Fusion)
+- [ ] **[Refactor]** k 파라미터 config화
+
+### 6-5. dynamic_topk.py
+- [ ] **[Red]** `tests/retrieval/test_dynamic_topk.py` 작성
+  - [ ] 코드 입력 → K = 8 반환 테스트
+  - [ ] 단순 질문 → K = 3 반환 테스트
+  - [ ] 중간 복잡도 분기 테스트
+- [ ] **[Green]** `src/retrieval/dynamic_topk.py` 구현
+- [ ] **[Refactor]** 복잡도 판별 기준 고도화
+
+### 6-6. query_rewriter.py
+- [ ] **[Red]** `tests/retrieval/test_query_rewriter.py` 작성 (LLM mock)
+  - [ ] HyDE 가상 문서 생성 테스트
+  - [ ] Multi-Query 확장 테스트 (N개 쿼리 반환)
+- [ ] **[Green]** `src/retrieval/query_rewriter.py` 구현
+- [ ] **[Refactor]** 프롬프트 템플릿 분리
+
+---
+
+## 7. 멀티 에이전트 (`src/agents/`)
+
+### 7-1. citation.py
+- [ ] **[Red]** `tests/agents/test_citation.py` 작성
+  - [ ] 중복 조항 제거 테스트
+  - [ ] SHA + URL + 개정일 부착 테스트
+  - [ ] 준수(compliant) / 보완(violation) 분류 테스트
+  - [ ] 출력 포맷 검증 테스트
+- [ ] **[Green]** `src/agents/citation.py` 구현 (Citation Assembler)
+- [ ] **[Refactor]** 개정 감지 뱃지 로직 분리
+
+### 7-2. privacy_agent.py
+- [ ] **[Red]** `tests/agents/test_privacy_agent.py` 작성 (LLM mock)
+  - [ ] 동의 코드 존재 시 준수 판정 테스트
+  - [ ] 민감정보 처리 코드 감지 테스트
+  - [ ] 마케팅 동의 미분리 위반 탐지 테스트
+  - [ ] Citation 반환 테스트
+- [ ] **[Green]** `src/agents/privacy_agent.py` 구현
+  - [ ] 개인정보 수집 동의, 처리방침, 민감정보, 보유기간, 마케팅 동의
+- [ ] **[Refactor]** 체크 항목 룰셋 분리
+
+### 7-3. security_agent.py
+- [ ] **[Red]** `tests/agents/test_security_agent.py` 작성 (LLM mock)
+  - [ ] 평문 비밀번호 패턴 탐지 테스트
+  - [ ] HTTP → HTTPS 리다이렉트 미적용 탐지 테스트
+  - [ ] SQL Injection 패턴 탐지 테스트
+  - [ ] Citation 반환 테스트
+- [ ] **[Green]** `src/agents/security_agent.py` 구현
+  - [ ] 비밀번호, HTTPS, SQL Injection, 접근 로그, 암호화
+- [ ] **[Refactor]** 패턴 매칭 룰셋 분리
+
+### 7-4. service_agent.py
+- [ ] **[Red]** `tests/agents/test_service_agent.py` 작성 (LLM mock)
+  - [ ] 결제 코드 감지 → 전자상거래법 적용 테스트
+  - [ ] 사업자 정보 미표시 탐지 테스트
+  - [ ] 청소년 연령 인증 미적용 탐지 테스트
+  - [ ] Citation 반환 테스트
+- [ ] **[Green]** `src/agents/service_agent.py` 구현
+  - [ ] 전자상거래, 사업자 표시, 환불 정책, 청소년 인증, 신용정보
+- [ ] **[Refactor]** 서비스 유형별 분기 로직 정리
+
+### 7-5. orchestrator.py
+- [ ] **[Red]** `tests/agents/test_orchestrator.py` 작성 (Sub-Agent mock)
+  - [ ] 파일 입력 → 3개 에이전트 병렬 호출 테스트
+  - [ ] URL 입력 → 파싱 후 에이전트 분배 테스트
+  - [ ] 자연어 입력 → 에이전트 분배 테스트
+  - [ ] 병렬 결과 병합 테스트
+- [ ] **[Green]** `src/agents/orchestrator.py` 구현 (LangChain AgentExecutor + RunnableParallel)
+- [ ] **[Refactor]** 입력 유형 판별 로직 고도화
+
+---
+
+## 8. 스트리밍 레이어 (`src/streaming/`)
+
+- [ ] **[Red]** `tests/streaming/test_redis_stream.py` 작성 (Redis mock)
+  - [ ] XADD 호출 및 메시지 포맷 테스트
+  - [ ] XREAD 순서 보장 테스트
+  - [ ] 에이전트별 채널 분리 테스트
+- [ ] **[Green]** `src/streaming/redis_stream.py` 구현
+- [ ] **[Refactor]** 스트림 이름 config화
+
+---
+
+## 9. 스크립트 (`scripts/`)
+
+- [ ] **[Red]** `tests/test_setup_index.py` 작성 (전체 파이프라인 mock)
+  - [ ] 수집 → SHA 비교 → 임베딩 전체 흐름 테스트
+  - [ ] 재시작 시 중복 임베딩 없음 테스트
+- [ ] **[Green]** `scripts/setup_index.py` 구현
+- [ ] **[Refactor]** 진행률 표시 (tqdm)
+
+---
+
+## 10. 통합 테스트 (`tests/integration/`)
+
+- [ ] `tests/integration/test_e2e_file.py` — 파일 입력 E2E
+  - [ ] 의도적 위반 코드 → 위반 항목 탐지 확인
+  - [ ] 준수 코드 → 준수 판정 확인
+- [ ] `tests/integration/test_e2e_url.py` — URL 입력 E2E
+- [ ] `tests/integration/test_cache_hit.py` — Semantic Cache 히트/미스
+- [ ] `tests/integration/test_stream_order.py` — Redis Stream 순서 보장
+- [ ] `tests/integration/test_citation_integrity.py` — Citation SHA 정합성
+
+---
+
+## 11. Streamlit UI (`app.py`)
+
+- [ ] 입력 폼 (파일 경로 / URL / 자연어 질문 탭)
+- [ ] 분석 실행 버튼
+- [ ] `st.write_stream()` 실시간 스트리밍 응답 패널
+- [ ] 준수 항목(✅) / 보완 항목(⚠️) 구분 출력
+- [ ] Citation 카드 (SHA 앞 8자 + 원문 링크)
+- [ ] 개정 감지 뱃지 (hash_prev ≠ hash_curr 시 🔔)
+
+---
+
+## 12. 인프라 (`Docker`)
+
+- [ ] `Dockerfile` 작성 (uv 멀티스테이지 빌드)
+- [ ] `docker-compose.yml` 작성 (qdrant + redis + app)
+- [ ] `.dockerignore` 작성
+- [ ] `docker-compose up --build` 정상 기동 확인
+
+---
+
+## 진행 현황 요약
+
+| 모듈 | 테스트 작성 | 구현 | 리팩터 |
+|------|------------|------|--------|
+| 프로젝트 초기 설정 | - | **완료** | - |
+| core/models | 미완료 | 미완료 | 미완료 |
+| core/config | 미완료 | 미완료 | 미완료 |
+| integrity/hasher | 미완료 | 미완료 | 미완료 |
+| integrity/db | 미완료 | 미완료 | 미완료 |
+| collector/parser | 미완료 | 미완료 | 미완료 |
+| collector/law_api | 미완료 | 미완료 | 미완료 |
+| collector/scheduler | 미완료 | 미완료 | 미완료 |
+| embedder/chunker | 미완료 | 미완료 | 미완료 |
+| embedder/indexer | 미완료 | 미완료 | 미완료 |
+| input/file_loader | 미완료 | 미완료 | 미완료 |
+| input/url_parser | 미완료 | 미완료 | 미완료 |
+| input/token_splitter | 미완료 | 미완료 | 미완료 |
+| retrieval/cache | 미완료 | 미완료 | 미완료 |
+| retrieval/bm25 | 미완료 | 미완료 | 미완료 |
+| retrieval/vector | 미완료 | 미완료 | 미완료 |
+| retrieval/rrf | 미완료 | 미완료 | 미완료 |
+| retrieval/dynamic_topk | 미완료 | 미완료 | 미완료 |
+| retrieval/query_rewriter | 미완료 | 미완료 | 미완료 |
+| agents/citation | 미완료 | 미완료 | 미완료 |
+| agents/privacy | 미완료 | 미완료 | 미완료 |
+| agents/security | 미완료 | 미완료 | 미완료 |
+| agents/service | 미완료 | 미완료 | 미완료 |
+| agents/orchestrator | 미완료 | 미완료 | 미완료 |
+| streaming/redis_stream | 미완료 | 미완료 | 미완료 |
+| scripts/setup_index | 미완료 | 미완료 | 미완료 |
+| 통합 테스트 | 미완료 | - | - |
+| Streamlit UI | - | 미완료 | - |
+| Docker 인프라 | - | 미완료 | - |
