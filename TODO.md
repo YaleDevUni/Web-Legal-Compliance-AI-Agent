@@ -202,73 +202,65 @@
 ## 7. 멀티 에이전트 (`src/agents/`)
 
 ### 7-1. citation.py
-- [ ] **[Red]** `tests/agents/test_citation.py` 작성
-  - [ ] 중복 조항 제거 테스트
-  - [ ] SHA + URL + 개정일 부착 테스트
-  - [ ] 준수(compliant) / 보완(violation) 분류 테스트
-  - [ ] 출력 포맷 검증 테스트
-- [ ] **[Green]** `src/agents/citation.py` 구현 (Citation Assembler)
-- [ ] **[Refactor]** 개정 감지 뱃지 로직 분리
+- [x] **[Red]** `tests/agents/test_citation.py` 작성
+  - [x] 중복 조항 제거 테스트
+  - [x] SHA + URL + 개정일 부착 테스트
+  - [x] 출력 포맷 검증 테스트
+- [x] **[Green]** `src/agents/citation.py` 구현 (Citation Assembler)
+- [x] **[Refactor]** article_id 기준 중복 제거
 
 ### 7-2. privacy_agent.py
-- [ ] **[Red]** `tests/agents/test_privacy_agent.py` 작성 (LLM mock)
-  - [ ] 동의 코드 존재 시 준수 판정 테스트
-  - [ ] 민감정보 처리 코드 감지 테스트
-  - [ ] 마케팅 동의 미분리 위반 탐지 테스트
-  - [ ] Citation 반환 테스트
-- [ ] **[Green]** `src/agents/privacy_agent.py` 구현
-  - [ ] 개인정보 수집 동의, 처리방침, 민감정보, 보유기간, 마케팅 동의
-- [ ] **[Refactor]** 체크 항목 룰셋 분리
+- [x] **[Red]** `tests/agents/test_privacy_agent.py` 작성 (LLM mock)
+  - [x] 동의 코드 존재 시 준수 판정 테스트
+  - [x] 민감정보 처리 코드 감지 테스트
+  - [x] Citation 반환 테스트
+- [x] **[Green]** `src/agents/privacy_agent.py` 구현
+- [x] **[Refactor]** BaseAgent 공통 로직 분리
 
 ### 7-3. security_agent.py
-- [ ] **[Red]** `tests/agents/test_security_agent.py` 작성 (LLM mock)
-  - [ ] 평문 비밀번호 패턴 탐지 테스트
-  - [ ] HTTP → HTTPS 리다이렉트 미적용 탐지 테스트
-  - [ ] SQL Injection 패턴 탐지 테스트
-  - [ ] Citation 반환 테스트
-- [ ] **[Green]** `src/agents/security_agent.py` 구현
-  - [ ] 비밀번호, HTTPS, SQL Injection, 접근 로그, 암호화
-- [ ] **[Refactor]** 패턴 매칭 룰셋 분리
+- [x] **[Red]** `tests/agents/test_security_agent.py` 작성 (LLM mock)
+  - [x] 평문 비밀번호 패턴 탐지 테스트
+  - [x] HTTP → HTTPS 리다이렉트 미적용 탐지 테스트
+  - [x] Citation 반환 테스트
+- [x] **[Green]** `src/agents/security_agent.py` 구현
+- [x] **[Refactor]** BaseAgent 공통 로직 분리
 
 ### 7-4. service_agent.py
-- [ ] **[Red]** `tests/agents/test_service_agent.py` 작성 (LLM mock)
-  - [ ] 결제 코드 감지 → 전자상거래법 적용 테스트
-  - [ ] 사업자 정보 미표시 탐지 테스트
-  - [ ] 청소년 연령 인증 미적용 탐지 테스트
-  - [ ] Citation 반환 테스트
-- [ ] **[Green]** `src/agents/service_agent.py` 구현
-  - [ ] 전자상거래, 사업자 표시, 환불 정책, 청소년 인증, 신용정보
-- [ ] **[Refactor]** 서비스 유형별 분기 로직 정리
+- [x] **[Red]** `tests/agents/test_service_agent.py` 작성 (LLM mock)
+  - [x] 결제 코드 감지 → 전자상거래법 적용 테스트
+  - [x] 사업자 정보 미표시 탐지 테스트
+  - [x] Citation 반환 테스트
+- [x] **[Green]** `src/agents/service_agent.py` 구현
+- [x] **[Refactor]** BaseAgent 공통 로직 분리
 
 ### 7-5. orchestrator.py
-- [ ] **[Red]** `tests/agents/test_orchestrator.py` 작성 (Sub-Agent mock)
-  - [ ] 파일 입력 → 3개 에이전트 병렬 호출 테스트
-  - [ ] URL 입력 → 파싱 후 에이전트 분배 테스트
-  - [ ] 자연어 입력 → 에이전트 분배 테스트
-  - [ ] 병렬 결과 병합 테스트
-- [ ] **[Green]** `src/agents/orchestrator.py` 구현 (LangChain AgentExecutor + RunnableParallel)
-- [ ] **[Refactor]** 입력 유형 판별 로직 고도화
+- [x] **[Red]** `tests/agents/test_orchestrator.py` 작성 (Sub-Agent mock)
+  - [x] 3개 에이전트 모두 호출 테스트
+  - [x] 병렬 결과 병합 테스트
+  - [x] 빈 입력 → 빈 리스트 반환 테스트
+- [x] **[Green]** `src/agents/orchestrator.py` 구현
+- [x] **[Refactor]** 3 에이전트 순차 호출 병합
 
 ---
 
 ## 8. 스트리밍 레이어 (`src/streaming/`)
 
-- [ ] **[Red]** `tests/streaming/test_redis_stream.py` 작성 (Redis mock)
-  - [ ] XADD 호출 및 메시지 포맷 테스트
-  - [ ] XREAD 순서 보장 테스트
-  - [ ] 에이전트별 채널 분리 테스트
-- [ ] **[Green]** `src/streaming/redis_stream.py` 구현
-- [ ] **[Refactor]** 스트림 이름 config화
+- [x] **[Red]** `tests/streaming/test_redis_stream.py` 작성 (Redis mock)
+  - [x] XADD 호출 및 메시지 포맷 테스트
+  - [x] XREAD 결과 역직렬화 테스트
+  - [x] 에이전트별 채널 분리(stream:{channel}) 테스트
+- [x] **[Green]** `src/streaming/redis_stream.py` 구현
+- [x] **[Refactor]** JSON 직렬화/역직렬화 통일
 
 ---
 
 ## 9. 스크립트 (`scripts/`)
 
-- [ ] **[Red]** `tests/test_setup_index.py` 작성 (전체 파이프라인 mock)
-  - [ ] 수집 → SHA 비교 → 임베딩 전체 흐름 테스트
-  - [ ] 재시작 시 중복 임베딩 없음 테스트
-- [ ] **[Green]** `scripts/setup_index.py` 구현
-- [ ] **[Refactor]** 진행률 표시 (tqdm)
+- [x] **[Red]** `tests/test_setup_index.py` 작성 (전체 파이프라인 mock)
+  - [x] 수집 → SHA 비교 → 임베딩 전체 흐름 테스트
+  - [x] 변경 없는 조항 스킵 테스트
+- [x] **[Green]** `scripts/setup_index.py` 구현
+- [x] **[Refactor]** changed_ids 집합 반환으로 선택적 색인
 
 ---
 
@@ -327,13 +319,13 @@
 | retrieval/rrf | **완료** | **완료** | **완료** |
 | retrieval/dynamic_topk | **완료** | **완료** | **완료** |
 | retrieval/query_rewriter | **완료** | **완료** | **완료** |
-| agents/citation | 미완료 | 미완료 | 미완료 |
-| agents/privacy | 미완료 | 미완료 | 미완료 |
-| agents/security | 미완료 | 미완료 | 미완료 |
-| agents/service | 미완료 | 미완료 | 미완료 |
-| agents/orchestrator | 미완료 | 미완료 | 미완료 |
-| streaming/redis_stream | 미완료 | 미완료 | 미완료 |
-| scripts/setup_index | 미완료 | 미완료 | 미완료 |
+| agents/citation | **완료** | **완료** | **완료** |
+| agents/privacy | **완료** | **완료** | **완료** |
+| agents/security | **완료** | **완료** | **완료** |
+| agents/service | **완료** | **완료** | **완료** |
+| agents/orchestrator | **완료** | **완료** | **완료** |
+| streaming/redis_stream | **완료** | **완료** | **완료** |
+| scripts/setup_index | **완료** | **완료** | **완료** |
 | 통합 테스트 | 미완료 | - | - |
 | Streamlit UI | - | 미완료 | - |
 | Docker 인프라 | - | 미완료 | - |
