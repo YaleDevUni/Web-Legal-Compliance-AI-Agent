@@ -1,10 +1,14 @@
-"""tests/collector/test_parser.py — law.go.kr XML 파서 TDD
+"""tests/collector/test_parser.py — law.go.kr XML/HTML 파서 TDD
 
 테스트 전략:
-- SAMPLE_XML: 정상 2개 조항 포함 응답
+- SAMPLE_XML: 정상 2개 조항 포함 응답 → parse_law_xml 검증
 - MISSING_FIELD_XML: 시행일자 누락 → 기본값으로 파싱 계속
 - EMPTY_XML: 조문 없음 → 빈 리스트 반환
 - sha256은 조문내용 텍스트로 직접 계산한 값과 일치해야 함
+- SAMPLE_HTML: 최소 조문 HTML → parse_law_html 검증
+  - 법령명, 시행일, 조문번호, 조문내용, sha256 필드 확인
+  - 의N 접미사 조문(제7조의2) → article_id에 의2 포함
+  - 장 제목(gtit) 스킵 확인
 """
 import pytest
 
@@ -102,4 +106,85 @@ class TestLawParser:
         from collector.parser import parse_law_xml
         from integrity.hasher import compute_sha256
         articles = parse_law_xml(SAMPLE_XML)
+        assert articles[0].sha256 == compute_sha256(articles[0].content)
+
+
+# ── HTML 파서 테스트 ──────────────────────────────────────────────────────────
+
+SAMPLE_HTML = """<!DOCTYPE html>
+<html><head><title>테스트</title></head>
+<body>
+<div class="confnla1">
+  <h2>개인정보 보호법</h2>
+  <div class="subtit1">[시행 2024. 3. 15.] [법률 제12345호]</div>
+  <a name="JP1:0" id="JP1:0"></a>
+  <div class="pgroup" style="padding-bottom:0px;">
+    <p class="gtit">제1장 총칙</p>
+  </div>
+  <a name="J1:0" id="J1:0"></a>
+  <div class="pgroup">
+    <p class="pty1"><span class="bl">제1조(목적)</span> 이 법은 개인정보 보호를 위한 것이다.<span class="sfon">&lt;개정 2020. 2. 4.&gt;</span></p>
+  </div>
+  <a name="J3:0" id="J3:0"></a>
+  <div class="pgroup">
+    <p class="pty1"><span class="bl">제3조(원칙)</span> 개인정보처리자는 최소 수집 원칙을 준수하여야 한다.</p>
+    <p class="pty1_de2_1">② 목적 범위 내에서 처리하여야 한다.</p>
+  </div>
+  <a name="J7:2" id="J7:2"></a>
+  <div class="pgroup">
+    <p class="pty1"><span class="bl">제7조의2(보호위원회 구성)</span> 보호위원회는 9명의 위원으로 구성한다.</p>
+  </div>
+</div>
+</body></html>"""
+
+
+class TestLawHtmlParser:
+    def test_parse_html_returns_articles(self):
+        """최소 HTML → 3개 조문 LawArticle 반환 (장 제목 스킵)"""
+        from collector.parser import parse_law_html
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
+        assert len(articles) == 3
+
+    def test_html_law_name_extracted(self):
+        """h2 태그에서 법령명 추출"""
+        from collector.parser import parse_law_html
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
+        assert articles[0].law_name == "개인정보 보호법"
+
+    def test_html_updated_at_extracted(self):
+        """subtit1에서 시행일 2024-03-15 추출"""
+        from collector.parser import parse_law_html
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
+        assert articles[0].updated_at.year == 2024
+        assert articles[0].updated_at.month == 3
+
+    def test_html_article_id_format(self):
+        """article_id: PA_1, PA_3, PA_7의2 형식"""
+        from collector.parser import parse_law_html
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
+        ids = [a.article_id for a in articles]
+        assert "PA_1" in ids
+        assert "PA_3" in ids
+        assert "PA_7의2" in ids
+
+    def test_html_sfon_removed_from_content(self):
+        """개정 주석(sfon)이 content에서 제거됨"""
+        from collector.parser import parse_law_html
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
+        a1 = next(a for a in articles if a.article_id == "PA_1")
+        assert "<개정" not in a1.content
+        assert "sfon" not in a1.content
+
+    def test_html_chapter_title_skipped(self):
+        """gtit 클래스 장 제목 div는 조문으로 파싱되지 않음"""
+        from collector.parser import parse_law_html
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
+        contents = [a.content for a in articles]
+        assert not any("총칙" in c and "제1장" in c for c in contents)
+
+    def test_html_sha256_computed(self):
+        """sha256은 content로 계산한 값과 동일"""
+        from collector.parser import parse_law_html
+        from integrity.hasher import compute_sha256
+        articles = parse_law_html(SAMPLE_HTML, law_id_prefix="PA")
         assert articles[0].sha256 == compute_sha256(articles[0].content)

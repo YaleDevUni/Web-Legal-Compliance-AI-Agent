@@ -1,6 +1,14 @@
-"""src/collector/parser.py — law.go.kr XML 응답 파서"""
+"""src/collector/parser.py — law.go.kr XML/HTML 파서
+
+parse_law_xml : API 응답 XML → list[LawArticle]  (API 키 사용 시)
+parse_law_html: 다운로드 HTML → list[LawArticle] (직접 파일 제공 시)
+두 함수 모두 동일한 LawArticle 형식을 반환하므로 이후 파이프라인은 동일하게 동작함.
+"""
+import re
 from datetime import datetime
 from xml.etree import ElementTree as ET
+
+from bs4 import BeautifulSoup
 
 from core.logger import logger
 from core.models import LawArticle
@@ -56,5 +64,106 @@ def parse_law_xml(xml_text: str) -> list[LawArticle]:
             articles.append(article)
         except Exception as e:
             logger.error(f"LawArticle 생성 실패 ({law_id}_{number}): {e}")
+
+    return articles
+
+
+# ── 앵커 ID 파싱 헬퍼 ──────────────────────────────────────────────────────
+
+_ANCHOR_RE = re.compile(r"^J(\d+):(\d+)$")          # J1:0, J7:2
+_ENACT_DATE_RE = re.compile(r"\[시행\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.")
+_ARTICLE_NUM_RE = re.compile(r"^(제\d+조(?:의\d+)?)")
+
+
+def _anchor_to_article_id(name: str, prefix: str) -> str | None:
+    """'J7:2' → '{prefix}_7의2', 'J1:0' → '{prefix}_1', JP → None(스킵)."""
+    m = _ANCHOR_RE.match(name)
+    if not m:
+        return None
+    jo, ui = m.group(1), m.group(2)
+    suffix = f"{jo}의{ui}" if ui != "0" else jo
+    return f"{prefix}_{suffix}"
+
+
+def parse_law_html(
+    html_text: str,
+    law_id_prefix: str = "LAW",
+) -> list[LawArticle]:
+    """law.go.kr 다운로드 HTML을 LawArticle 리스트로 변환한다.
+
+    law_id_prefix: article_id 앞에 붙을 접두사. 법령별로 지정.
+    예) 개인정보 보호법 → "PA", 정보통신망법 → "IC"
+    API 키 발급 후 parse_law_xml 으로 전환해도 동일 포맷이므로 파이프라인 변경 불필요.
+    """
+    soup = BeautifulSoup(html_text, "lxml")
+
+    # ── 법령명 ────────────────────────────────────────────────────────────────
+    confnla = soup.find("div", class_="confnla1")
+    h2 = confnla.find("h2") if confnla else None
+    law_name = h2.get_text(strip=True) if h2 else "알 수 없음"
+
+    # ── 시행일 ────────────────────────────────────────────────────────────────
+    updated_at = datetime.now()
+    subtit = soup.find("div", class_="subtit1")
+    if subtit:
+        m = _ENACT_DATE_RE.search(subtit.get_text())
+        if m:
+            updated_at = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+    law_url = f"https://www.law.go.kr/법령/{law_name}"
+
+    # ── 조문 순회 ─────────────────────────────────────────────────────────────
+    articles: list[LawArticle] = []
+    for anchor in soup.find_all("a", attrs={"name": _ANCHOR_RE}):
+        article_id = _anchor_to_article_id(anchor["name"], law_id_prefix)
+        if not article_id:
+            continue
+
+        pgroup = anchor.find_next_sibling("div", class_="pgroup")
+        if not pgroup:
+            continue
+
+        # 장/절 제목 div는 gtit 클래스 p 포함 → 스킵
+        if pgroup.find("p", class_="gtit"):
+            continue
+
+        # 조문 제목 확인 (span.bl에 '제N조' 포함)
+        bl = pgroup.find("span", class_="bl")
+        if not bl:
+            continue
+        header_text = bl.get_text(strip=True)
+        mn = _ARTICLE_NUM_RE.match(header_text)
+        if not mn:
+            continue
+        article_number = mn.group(1)
+
+        # 개정·신설 주석 제거 후 텍스트 추출
+        for sfon in pgroup.find_all("span", class_="sfon"):
+            sfon.decompose()
+
+        content = " ".join(
+            p.get_text(separator=" ", strip=True)
+            for p in pgroup.find_all("p")
+            if p.get_text(strip=True)
+        ).strip()
+
+        if not content:
+            logger.warning(f"조문내용 누락: {article_id}")
+            continue
+
+        try:
+            articles.append(
+                LawArticle(
+                    article_id=article_id,
+                    law_name=law_name,
+                    article_number=article_number,
+                    content=content,
+                    sha256=compute_sha256(content),
+                    url=law_url,
+                    updated_at=updated_at,
+                )
+            )
+        except Exception as e:
+            logger.error(f"LawArticle 생성 실패 ({article_id}): {e}")
 
     return articles
