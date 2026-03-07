@@ -262,6 +262,12 @@
 - [x] **[Green]** `scripts/setup_index.py` 구현
 - [x] **[Refactor]** changed_ids 집합 반환으로 선택적 색인
 
+### 9-2. load_html_laws.py
+- [x] **[Green]** `scripts/load_html_laws.py` 구현
+  - [x] `data/laws/*.html` 전체 로드 → parse_law_html → setup_index 파이프라인
+  - [x] 파일명 → law_id_prefix 매핑 테이블
+  - [x] 파싱 결과 요약 출력 (법령별 조문 수, 총계)
+
 ---
 
 ## 10. 통합 테스트 (`tests/integration/`)
@@ -291,7 +297,7 @@
 - [x] `Dockerfile` 작성 (uv 멀티스테이지 빌드)
 - [x] `docker-compose.yml` 작성 (qdrant + redis + app)
 - [x] `.dockerignore` 작성
-- [ ] `docker-compose up --build` 정상 기동 확인
+- [ ] `docker compose up --build` 정상 기동 확인
 
 ---
 
