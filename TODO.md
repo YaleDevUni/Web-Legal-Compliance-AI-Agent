@@ -28,14 +28,14 @@
 - [x] **[Refactor]** 유효성 검사 validator 추가
 
 ### 1-2. config.py
-- [ ] **[Red]** `tests/core/test_config.py` 작성
-  - [ ] 환경변수 누락 시 예외 발생 테스트
-  - [ ] 기본값 설정 테스트
-- [ ] **[Green]** `src/core/config.py` 구현 (pydantic BaseSettings)
-- [ ] **[Refactor]** 환경별 설정 분리 (dev / prod)
+- [x] **[Red]** `tests/core/test_config.py` 작성
+  - [x] 환경변수 누락 시 예외 발생 테스트
+  - [x] 기본값 설정 테스트
+- [x] **[Green]** `src/core/config.py` 구현 (pydantic BaseSettings)
+- [x] **[Refactor]** 환경별 설정 분리 (dev / prod)
 
 ### 1-3. logger.py
-- [ ] **[Green]** `src/core/logger.py` 구현 (loguru, 테스트 불필요)
+- [x] **[Green]** `src/core/logger.py` 구현 (loguru, 테스트 불필요)
 
 ---
 
@@ -306,7 +306,7 @@
 |------|------------|------|--------|
 | 프로젝트 초기 설정 | - | **완료** | - |
 | core/models | **완료** | **완료** | **완료** |
-| core/config | 미완료 | 미완료 | 미완료 |
+| core/config | **완료** | **완료** | **완료** |
 | integrity/hasher | 미완료 | 미완료 | 미완료 |
 | integrity/db | 미완료 | 미완료 | 미완료 |
 | collector/parser | 미완료 | 미완료 | 미완료 |
