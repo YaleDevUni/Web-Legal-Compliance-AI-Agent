@@ -1,6 +1,10 @@
 """app.py — Web Legal Compliance AI Agent Streamlit UI"""
 import os
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
