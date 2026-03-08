@@ -62,7 +62,7 @@ export const CitationPanel: React.FC<CitationPanelProps> = ({
                         isActive ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
                       }`}
                     >
-                      {i + 1}
+                      {String.fromCharCode(97 + i)}
                     </span>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${

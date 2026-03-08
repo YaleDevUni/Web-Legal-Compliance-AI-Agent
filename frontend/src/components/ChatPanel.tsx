@@ -79,7 +79,7 @@ function AssistantMarkdown({
                 isActive ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
               }`}
             >
-              {idx}
+              {String.fromCharCode(96 + parseInt(idx))}
             </button>
           );
         }
