@@ -19,7 +19,7 @@
 
 > **Ask a question — get a cited, streamed legal answer in seconds.**
 
-![Demo](public/demo1.png)
+![Demo](docs/demo1.png)
 
 **Sample questions to try:**
 - `"전세 계약 만료 후 집주인이 보증금을 안 돌려주면 어떻게 해야 하나요?"`
