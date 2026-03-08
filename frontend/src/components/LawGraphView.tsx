@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useCallback, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import ForceGraph2D from "react-force-graph-2d";
 import type { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
 
@@ -10,70 +11,93 @@ interface GraphNode extends NodeObject {
 }
 
 interface GraphLink {
-  source: string;
-  target: string;
+  source: string | { id: string };
+  target: string | { id: string };
 }
 
 interface LawGraphViewProps {
-  citedArticleIds: string[]; // 현재 답변에서 인용된 조문 ID들
+  citedArticleIds: string[]; // 직접 인용된 조문 ID
+  relatedArticleIds?: string[]; // 그래프 확장을 통해 연관된 조문 ID
   onNodeClick?: (articleId: string) => void;
   width?: number;
   height?: number;
 }
 
-// React.memo를 사용하여 부모의 다른 상태(스트리밍 텍스트 등) 변화로 인한 불필요한 리렌더링 방지
 const LawGraphView: React.FC<LawGraphViewProps> = React.memo(({ 
   citedArticleIds, 
+  relatedArticleIds = [],
   onNodeClick, 
   width = 600, 
   height = 400 
 }) => {
-  const [rawData, setRawData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
 
-  // 1. 컴포넌트 마운트 시에만 그래프 데이터 로드
-  useEffect(() => {
-    fetch("/api/graph")
-      .then((res) => res.json())
-      .then((json) => {
-        setRawData(json);
-      })
-      .catch((err) => console.error("그래프 로드 실패:", err));
-  }, []); // 의존성 배열을 비워 처음에만 실행
+  // 전체 그래프 데이터 캐싱 (한 번만 로드)
+  const { data: fullGraph } = useQuery({
+    queryKey: ["law-graph"],
+    queryFn: async () => {
+      const res = await fetch("/api/graph");
+      if (!res.ok) throw new Error("그래프 로드 실패");
+      return res.json() as Promise<{ nodes: GraphNode[]; links: GraphLink[] }>;
+    },
+    staleTime: Infinity,
+  });
 
-  // 2. 인용된 ID들을 Set으로 관리하여 검색 성능 최적화
-  const citedSet = useMemo(() => new Set(citedArticleIds), [citedArticleIds]);
+  // 현재 인용/연관된 조문들만 필터링하여 서브그래프 생성
+  const subGraphData = useMemo(() => {
+    if (!fullGraph) return { nodes: [], links: [] };
+
+    const visibleIds = new Set([...citedArticleIds, ...relatedArticleIds]);
+    if (visibleIds.size === 0) return { nodes: [], links: [] };
+
+    // 1. 노드 필터링
+    const filteredNodes = fullGraph.nodes.filter(node => visibleIds.has(node.id));
+
+    // 2. 엣지 필터링 (양쪽 노드가 모두 가시권에 있는 경우만)
+    const filteredLinks = fullGraph.links.filter(link => {
+      const sourceId = typeof link.source === 'string' ? link.source : (link.source as any).id;
+      const targetId = typeof link.target === 'string' ? link.target : (link.target as any).id;
+      return visibleIds.has(sourceId) && visibleIds.has(targetId);
+    });
+
+    return { nodes: filteredNodes, links: filteredLinks };
+  }, [fullGraph, citedArticleIds, relatedArticleIds]);
 
   const handleNodeClick = useCallback((node: any) => {
     const graphNode = node as GraphNode;
     if (onNodeClick && graphNode.id) {
       onNodeClick(graphNode.id);
     }
-    
-    if (fgRef.current && graphNode.x !== undefined && graphNode.y !== undefined) {
-      fgRef.current.centerAt(graphNode.x, graphNode.y, 600);
-      fgRef.current.zoom(2.5, 600);
-    }
   }, [onNodeClick]);
+
+  if (!fullGraph || subGraphData.nodes.length === 0) {
+    return (
+      <div style={{ width, height, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#94a3b8', fontSize: '10px' }}>
+        {citedArticleIds.length === 0 ? "인용된 조문이 여기에 표시됩니다." : "그래프 생성 중..."}
+      </div>
+    );
+  }
 
   return (
     <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden", background: "#f8fafc" }}>
       <ForceGraph2D
         ref={fgRef}
-        graphData={rawData}
+        graphData={subGraphData}
         width={width}
         height={height}
         nodeLabel="name"
-        // 3. 데이터를 다시 불러오지 않고 렌더링 시점에 색상 결정
-        nodeColor={(node: any) => citedSet.has((node as GraphNode).id) ? "#ef4444" : "#3b82f6"}
-        nodeRelSize={4}
-        // 4. 인용된 노드는 크기를 더 크게 표시
-        nodeVal={(node: any) => citedSet.has((node as GraphNode).id) ? 3 : 1}
-        linkDirectionalArrowLength={3}
+        nodeColor={(node: any) => citedArticleIds.includes((node as GraphNode).id) ? "#ef4444" : "#fbbf24"}
+        nodeRelSize={6}
+        nodeVal={(node: any) => citedArticleIds.includes((node as GraphNode).id) ? 2 : 1}
+        linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={1}
-        linkColor={() => "#cbd5e1"}
+        linkColor={() => "#94a3b8"}
+        linkWidth={1.5}
         onNodeClick={handleNodeClick}
-        cooldownTicks={50} // 물리 엔진 계산 시간 단축
+        // 노드가 적으므로 더 활발한 물리 엔진 설정
+        d3AlphaDecay={0.02}
+        d3VelocityDecay={0.3}
+        cooldownTicks={100}
       />
     </div>
   );

@@ -37,6 +37,7 @@ export function useChat() {
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [relatedArticleIds, setRelatedArticleIds] = useState<string[]>([]);
   const prevHistoryLenRef = useRef(0);
   const historyRef = useRef<Message[]>([]);
 
@@ -52,7 +53,7 @@ export function useChat() {
     enabled: !!sessionId,
   });
 
-  // 세션 citations — React Query 캐시 + localStorage 이중 저장 (새로고침 복원용)
+  // 세션 citations
   const { data: citations = [] } = useQuery<Citation[]>({
     queryKey: ['citations', sessionId],
     queryFn: () => {
@@ -66,16 +67,14 @@ export function useChat() {
 
   historyRef.current = history;
 
-  // history에 새 교환이 확정되면 스트리밍 버블 제거 후 pendingUserMessage 해제
   useEffect(() => {
     if (!pendingUserMessage) return;
     if (history.length > prevHistoryLenRef.current + 1) {
-      setStreamingAnswer(''); // history에 답변이 들어온 뒤에 스트리밍 버블 제거
+      setStreamingAnswer('');
       setPendingUserMessage(null);
     }
   }, [history, pendingUserMessage]);
 
-  // 세션 초기화
   const resetSession = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(`citations:${sessionId}`);
@@ -85,9 +84,9 @@ export function useChat() {
     setActiveCitationId(null);
     setStreamingAnswer('');
     setPendingUserMessage(null);
+    setRelatedArticleIds([]);
   }, [queryClient, sessionId]);
 
-  // 질문 전송 (SSE)
   const ask = useCallback(async (question: string) => {
     prevHistoryLenRef.current = historyRef.current.length;
 
@@ -125,7 +124,12 @@ export function useChat() {
           } else if (event === 'citations') {
             const ev = payload as ChatCitationsEvent;
             const sid = ev.session_id || resolvedSessionId;
-            // React Query 캐시 + localStorage에 누적 append (article_id 기준 중복 제거)
+            
+            // 관련 조문 ID 업데이트
+            if (ev.related_articles) {
+              setRelatedArticleIds((prev) => Array.from(new Set([...prev, ...ev.related_articles])));
+            }
+
             queryClient.setQueryData<Citation[]>(['citations', sid], (prev = []) => {
               const existingIds = new Set(prev.map((c) => c.article_id));
               const newOnes = ev.citations.filter((c) => !existingIds.has(c.article_id));
@@ -145,7 +149,6 @@ export function useChat() {
         });
       }
 
-      // streamingAnswer는 history 갱신 후 useEffect에서 제거 (즉시 제거 시 공백 깜빡임 발생)
       setLoading(false);
 
       if (resolvedSessionId) {
@@ -161,7 +164,6 @@ export function useChat() {
     }
   }, [sessionId, queryClient]);
 
-  // displayHistory: pendingUserMessage는 history에 아직 없을 때만 추가
   const userInHistory = pendingUserMessage
     ? history.some((m) => m.role === 'user' && m.content === pendingUserMessage)
     : false;
@@ -176,6 +178,7 @@ export function useChat() {
     citations,
     activeCitationId,
     setActiveCitationId,
+    relatedArticleIds,
     loading,
     error,
     ask,

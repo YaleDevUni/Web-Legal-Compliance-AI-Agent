@@ -11,6 +11,7 @@ function App() {
     citations,
     activeCitationId,
     setActiveCitationId,
+    relatedArticleIds,
     loading,
     error,
     ask,
@@ -67,17 +68,24 @@ function App() {
           {/* 지식 그래프 뷰 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-col overflow-hidden h-[300px]">
             <h3 className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-2">
-              <span className="text-blue-500 text-sm">🕸️</span> 지식 그래프 (Knowledge Graph)
+              <span className="text-blue-500 text-sm">🕸️</span> 연관 법령망 (Citation Graph)
             </h3>
             <div className="flex-1 min-h-0 bg-slate-50 rounded-lg overflow-hidden border border-slate-100">
               <LawGraphView 
                 citedArticleIds={citedArticleIds}
+                relatedArticleIds={relatedArticleIds}
                 onNodeClick={setActiveCitationId}
-                width={320} // 대략적인 우측 패널 너비
+                width={320} 
                 height={250}
               />
             </div>
-            <p className="mt-2 text-[10px] text-slate-400">노드를 클릭하면 조문 내용을 확인할 수 있습니다.</p>
+            <div className="mt-2 flex items-center justify-between">
+              <div className="flex gap-2 text-[9px]">
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>인용됨</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>참조됨</span>
+              </div>
+              <p className="text-[10px] text-slate-400">노드 클릭 시 조문 확인</p>
+            </div>
           </div>
           
           {/* 인용 패널 */}
