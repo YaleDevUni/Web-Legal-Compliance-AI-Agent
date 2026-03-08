@@ -62,10 +62,11 @@ export function useChat() {
 
   historyRef.current = history;
 
-  // history에 새 교환이 확정되면 pendingUserMessage 해제
+  // history에 새 교환이 확정되면 스트리밍 버블 제거 후 pendingUserMessage 해제
   useEffect(() => {
     if (!pendingUserMessage) return;
     if (history.length > prevHistoryLenRef.current + 1) {
+      setStreamingAnswer(''); // history에 답변이 들어온 뒤에 스트리밍 버블 제거
       setPendingUserMessage(null);
     }
   }, [history, pendingUserMessage]);
@@ -136,7 +137,7 @@ export function useChat() {
         });
       }
 
-      setStreamingAnswer('');
+      // streamingAnswer는 history 갱신 후 useEffect에서 제거 (즉시 제거 시 공백 깜빡임 발생)
       setLoading(false);
 
       if (resolvedSessionId) {
