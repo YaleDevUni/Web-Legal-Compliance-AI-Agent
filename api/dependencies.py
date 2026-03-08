@@ -31,7 +31,7 @@ def get_retriever() -> HybridRetriever | None:
 def get_redis_client():
     try:
         settings = get_settings()
-        client = redis_lib.from_url(settings.redis_url, decode_responses=False)
+        client = redis_lib.from_url(settings.redis_url, decode_responses=True)
         client.ping()
         return client
     except Exception as e:

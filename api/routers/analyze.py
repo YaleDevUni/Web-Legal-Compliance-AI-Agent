@@ -1,8 +1,12 @@
 """api/routers/analyze.py — Job Queue 기반 분석 엔드포인트.
 
 흐름:
-  POST /api/analyze          → job_id 즉시 반환 + Redis Stream에 job enqueue
-  GET  /api/analyze/{id}/events → Redis Pub/Sub subscribe → SSE 스트리밍
+  POST /api/analyze               → job_id 즉시 반환 + stream:jobs에 enqueue
+  GET  /api/analyze/{id}/events   → result:{job_id} 스트림 XREAD → SSE 스트리밍
+
+Race-condition 방지:
+  Worker가 result:{job_id}에 XADD하면 메시지가 보존됨.
+  SSE가 늦게 연결해도 id=0 부터 읽으므로 유실 없음.
 """
 import asyncio
 import json
@@ -18,6 +22,9 @@ from core.logger import logger
 router = APIRouter(prefix="/api", tags=["analyze"])
 
 JOBS_STREAM = "stream:jobs"
+RESULT_TTL = 600        # 결과 스트림 보존 시간 (초)
+POLL_INTERVAL = 0.1     # XREAD 폴링 간격 (초)
+JOB_TIMEOUT = 300       # 최대 대기 시간 (초)
 
 
 class AnalyzeRequest(BaseModel):
@@ -43,86 +50,96 @@ async def analyze_enqueue(body: AnalyzeRequest):
         raise HTTPException(status_code=400, detail="분석할 내용을 입력하세요.")
 
     rc = get_redis_client()
+    if not rc:
+        raise HTTPException(status_code=503, detail="Redis 연결 불가")
 
-    # 캐시 확인 — URL 입력이면 캐시된 job_id로 즉시 응답
+    # 캐시 확인 — URL 입력이면 result stream에 즉시 기록 후 반환
     url_cache = get_url_cache()
     if url_cache and body.url:
-        cached = url_cache.get(body.url)
-        if cached is not None:
-            job_id = f"cached:{uuid.uuid4().hex}"
-            # 캐시 결과를 Pub/Sub에 즉시 publish (worker 없이)
-            if rc:
-                channel = f"result:{job_id}"
-                for report in cached:
-                    rc.publish(channel, json.dumps({
-                        "_event": "report",
-                        **report.model_dump(mode="json"),
-                    }, ensure_ascii=False))
-                rc.publish(channel, json.dumps({
-                    "_event": "done", "total": len(cached), "cached": True
-                }))
+        cached_reports = url_cache.get(body.url)
+        if cached_reports is not None:
+            job_id = f"cache:{uuid.uuid4().hex}"
+            result_key = f"result:{job_id}"
+            for report in cached_reports:
+                rc.xadd(result_key, {
+                    "_event": "report",
+                    "data": json.dumps(report.model_dump(mode="json"), ensure_ascii=False),
+                })
+            rc.xadd(result_key, {"_event": "done", "total": str(len(cached_reports)), "cached": "1"})
+            rc.expire(result_key, RESULT_TTL)
             return EnqueueResponse(job_id=job_id, cached=True)
 
     job_id = uuid.uuid4().hex
-    if rc:
-        rc.xadd(JOBS_STREAM, {
-            "job_id": job_id,
-            "code_text": body.code_text,
-            "url": body.url or "",
-        })
-        logger.info(f"[{job_id[:8]}] job enqueued")
-    else:
-        raise HTTPException(status_code=503, detail="Redis 연결 불가")
-
+    rc.xadd(JOBS_STREAM, {
+        "job_id": job_id,
+        "code_text": body.code_text,
+        "url": body.url or "",
+    })
+    logger.info(f"[{job_id[:8]}] job enqueued")
     return EnqueueResponse(job_id=job_id)
 
 
-# ── GET: SSE subscribe ─────────────────────────────────────────────────────────
+# ── GET: SSE stream ────────────────────────────────────────────────────────────
 
 @router.get("/analyze/{job_id}/events")
-async def analyze_stream(job_id: str):
-    """Redis Pub/Sub에서 결과를 subscribe해 SSE로 전달."""
+async def analyze_events(job_id: str):
+    """result:{job_id} 스트림을 XREAD로 읽어 SSE로 전달."""
     return StreamingResponse(
-        _subscribe(job_id),
+        _read_result_stream(job_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-async def _subscribe(job_id: str):
+async def _read_result_stream(job_id: str):
     rc = get_redis_client()
     if not rc:
         yield _sse("error", {"message": "Redis 연결 불가"})
         return
 
-    channel = f"result:{job_id}"
-    pubsub = rc.pubsub()
-    pubsub.subscribe(channel)
+    result_key = f"result:{job_id}"
+    last_id = "0"           # 처음부터 읽음 — 늦게 연결해도 유실 없음
+    elapsed = 0.0
+    loop = asyncio.get_running_loop()
 
     try:
-        timeout = 300  # 최대 5분 대기
-        elapsed = 0.0
-        while elapsed < timeout:
-            msg = pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
-            if msg and msg["type"] == "message":
-                try:
-                    data = json.loads(msg["data"])
-                except (json.JSONDecodeError, TypeError):
-                    continue
+        while elapsed < JOB_TIMEOUT:
+            # 블로킹 XREAD를 스레드 풀에서 실행 (이벤트 루프 블로킹 방지)
+            entries = await loop.run_in_executor(
+                None,
+                lambda: rc.xread({result_key: last_id}, count=50, block=500),
+            )
 
-                event = data.pop("_event", "report")
-                yield _sse(event, data)
+            if not entries:
+                elapsed += 0.5
+                continue
 
-                if event == "done":
-                    break
-            else:
-                await asyncio.sleep(0.05)
-                elapsed += 0.05
-        else:
-            yield _sse("error", {"message": "분석 시간 초과"})
+            for _key, messages in entries:
+                for msg_id, fields in messages:
+                    last_id = msg_id
+                    event = fields.get("_event", "report")
+
+                    if event == "report":
+                        try:
+                            data = json.loads(fields["data"])
+                        except (KeyError, json.JSONDecodeError):
+                            continue
+                        yield _sse("report", data)
+
+                    elif event == "done":
+                        total = int(fields.get("total", 0))
+                        cached = fields.get("cached", "0") == "1"
+                        yield _sse("done", {"total": total, "cached": cached})
+                        return
+
+                    elif event == "error":
+                        yield _sse("error", {"message": fields.get("message", "알 수 없는 오류")})
+                        return
+
+            elapsed += 0.0  # XREAD block=500 이 대기시간 역할
+
+        yield _sse("error", {"message": "분석 시간 초과"})
+
     except Exception as e:
         logger.exception(f"[{job_id[:8]}] SSE 오류:")
         yield _sse("error", {"message": str(e)})
-    finally:
-        pubsub.unsubscribe(channel)
-        pubsub.close()

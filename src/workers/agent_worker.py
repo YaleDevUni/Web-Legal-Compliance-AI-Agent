@@ -3,9 +3,9 @@
 흐름:
   Redis Stream 'stream:jobs' consume
     → Orchestrator 실행
-      → 에이전트 완료 시마다 Redis Pub/Sub 'result:{job_id}'에 publish
-    → done 이벤트 publish
-    → XACK
+      → 에이전트 완료 시마다 Redis Stream 'result:{job_id}'에 XADD
+    → done 이벤트 XADD
+    → XACK (메시지 보존 → SSE가 늦게 구독해도 처음부터 읽을 수 있음)
 
 실행:
   uv run python -m workers.agent_worker
@@ -38,16 +38,23 @@ CONSUMER_NAME = f"worker-{os.getpid()}"
 BLOCK_MS = 5_000  # 5초 블로킹 read
 
 
-class PubSubStream:
-    """에이전트 결과를 Redis Pub/Sub으로 실시간 publish하는 stream 어댑터."""
+RESULT_TTL = 600  # 완료 후 10분간 보존
+
+
+class ResultStream:
+    """에이전트 결과를 Redis Stream(XADD)으로 저장하는 어댑터.
+
+    Pub/Sub과 달리 메시지가 스트림에 보존되므로 SSE가 늦게 연결해도 처음부터 읽을 수 있다.
+    """
 
     def __init__(self, redis_client, job_id: str) -> None:
         self._redis = redis_client
-        self._channel = f"result:{job_id}"
+        self._key = f"result:{job_id}"
 
     def publish(self, agent_name: str, message: dict) -> None:
-        payload = {"_event": "report", "_agent": agent_name, **message}
-        self._redis.publish(self._channel, json.dumps(payload, ensure_ascii=False))
+        payload = {"_event": "report", "_agent": agent_name,
+                   "data": json.dumps(message, ensure_ascii=False)}
+        self._redis.xadd(self._key, payload)
 
 
 def _init_resources():
@@ -76,11 +83,11 @@ def _ensure_consumer_group(rc):
 
 
 def _process_job(rc, retriever, url_cache, job_id: str, code_text: str, url: str):
-    channel = f"result:{job_id}"
+    result_key = f"result:{job_id}"
     logger.info(f"[{job_id[:8]}] 분석 시작 (url={url or '-'})")
 
     try:
-        stream = PubSubStream(rc, job_id)
+        stream = ResultStream(rc, job_id)
         orch = Orchestrator(retriever=retriever, stream=stream)
         reports = orch.run(code_text)
 
@@ -88,18 +95,14 @@ def _process_job(rc, retriever, url_cache, job_id: str, code_text: str, url: str
         if url and reports:
             url_cache.set(url, reports)
 
-        rc.publish(channel, json.dumps({
-            "_event": "done",
-            "total": len(reports),
-        }))
+        rc.xadd(result_key, {"_event": "done", "total": str(len(reports))})
+        rc.expire(result_key, RESULT_TTL)
         logger.info(f"[{job_id[:8]}] 완료: {len(reports)}개 보고서")
 
     except Exception as e:
         logger.exception(f"[{job_id[:8]}] 분석 오류:")
-        rc.publish(channel, json.dumps({
-            "_event": "error",
-            "message": str(e),
-        }))
+        rc.xadd(result_key, {"_event": "error", "message": str(e)})
+        rc.expire(result_key, RESULT_TTL)
 
 
 def run():
