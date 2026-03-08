@@ -30,16 +30,16 @@
 
 ## Highlights
 
-| | Feature | Detail |
-|--|---------|--------|
-| **Real-time Streaming** | SSE token streaming | Answers appear word-by-word; no waiting for full response |
-| **Cited Answers** | Article-level citations | Every legal claim links to the exact statute + URL |
-| **Hybrid Search** | BM25 + Vector + RRF | Keyword precision meets semantic recall |
-| **Law Graph** | NetworkX + Force-Graph | Visualizes cross-references between statutes interactively |
-| **Semantic Cache** | Qdrant cosine similarity | Similar questions reuse cached answers — ~25x faster, $0 API cost |
-| **SHA-256 Integrity** | SQLite audit trail | Detects statute amendments; incremental re-indexing only |
-| **LLM Queue** | Redis Stream Consumer Group | Handles traffic spikes without hitting OpenAI rate limits |
-| **Multi-worker** | `--workers $(nproc)` | Bypasses Python GIL — linear throughput scaling |
+| | 기술 | 설명 |
+|--|------|------|
+| **Real-time Streaming** | SSE 토큰 스트리밍 | 답변이 단어 단위로 실시간 출력 — 전체 응답 대기 없음 |
+| **Cited Answers** | 조문 단위 인용(Citation) | 모든 법적 근거에 법령명·조항번호·원문·링크 제공 |
+| **Hybrid Search** | BM25 + Vector + RRF | 키워드 정확도와 의미 유사도를 순위 기반으로 병합 |
+| **Law Graph** | NetworkX + Force-Graph | 조문 간 참조 관계를 인터랙티브 그래프로 시각화 |
+| **Semantic Cache** | Qdrant 코사인 유사도 | 유사 질문 재사용 — 약 25배 빠른 응답, OpenAI 비용 $0 |
+| **SHA-256 Integrity** | SQLite 무결성 감사 | 법령 개정 자동 감지 + 변경된 조문만 증분 재색인 |
+| **LLM Queue** | Redis Stream Consumer Group | 트래픽 급증 시 OpenAI Rate Limit 초과 방지 |
+| **Multi-worker** | `--workers $(nproc)` | Python GIL 우회 — CPU 코어 수에 비례한 처리량 확장 |
 
 ---
 
