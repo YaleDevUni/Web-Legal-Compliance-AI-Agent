@@ -41,7 +41,7 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
 
   // 대화 내역 조회
-  const { data: history = [], refetch: refetchHistory } = useQuery({
+  const { data: history = [] } = useQuery({
     queryKey: ['chatHistory', sessionId],
     queryFn: async () => {
       if (!sessionId) return [];
