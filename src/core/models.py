@@ -41,7 +41,11 @@ class Citation(BaseModel):
     sha256: str
     url: AnyHttpUrl
     updated_at: datetime
-    article_content: str = ""  # Qdrant에서 검색된 실제 법령 조문 텍스트
+    article_content: str = ""
+    # 판례 출처 필드 추가
+    case_number: str | None = None
+    court: str | None = None
+    decision_date: datetime | None = None
 
     @field_validator("sha256")
     @classmethod
@@ -56,38 +60,37 @@ class Citation(BaseModel):
 
     def format(self) -> str:
         date_str = self.updated_at.strftime("%Y-%m-%d")
+        if self.case_number:
+            return f"[{self.court} {self.case_number} · {self.decision_date.strftime('%Y-%m-%d') if self.decision_date else ''}]"
         return f"[{self.law_name} {self.article_number} · sha:{self.short_sha} · {date_str}]"
 
 
-class SourceLocation(BaseModel):
-    """원본 코드에서 문제 코드 스니펫의 위치 정보."""
+class CaseArticle(BaseModel):
+    """판례 모델"""
+    case_id: str # 판례일련번호
+    case_number: str # 사건번호
+    case_name: str # 사건명
+    court: str # 법원명
+    decision_date: datetime # 선고일자
+    decision_type: str # 선고유형 (예: 판결)
+    ruling_summary: str # 판시사항
+    ruling_text: str # 판결요지
+    referenced_articles: list[str] = Field(default_factory=list) # 참조조문
+    url: AnyHttpUrl
+    sha256: str
 
-    line_start: int
-    line_end: int
-    snippet: str
+    @field_validator("sha256")
+    @classmethod
+    def sha256_must_be_valid(cls, v: str) -> str:
+        if not _SHA256_RE.match(v):
+            raise ValueError("sha256 must be a 64-character hexadecimal string")
+        return v.lower()
 
 
-class ComplianceStatus(str, Enum):
-    COMPLIANT = "compliant"
-    VIOLATION = "violation"
-    UNVERIFIABLE = "unverifiable"
-
-
-class ComplianceReport(BaseModel):
-    status: ComplianceStatus
-    description: str
+class LegalAnswer(BaseModel):
+    """최종 법률 답변 모델 (ComplianceReport 대체)"""
+    question: str
+    answer: str # Reasoning 텍스트
     citations: list[Citation] = Field(default_factory=list)
-    recommendation: str = ""
-    source_location: SourceLocation | None = None
-
-    @property
-    def is_compliant(self) -> bool:
-        return self.status == ComplianceStatus.COMPLIANT
-
-    @property
-    def is_violation(self) -> bool:
-        return self.status == ComplianceStatus.VIOLATION
-
-    @property
-    def is_unverifiable(self) -> bool:
-        return self.status == ComplianceStatus.UNVERIFIABLE
+    related_articles: list[str] = Field(default_factory=list) # 그래프 확장 조문 ID
+    session_id: str

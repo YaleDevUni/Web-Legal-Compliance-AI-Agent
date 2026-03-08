@@ -23,15 +23,10 @@
 > 웹 분석 기능 제거, 도메인 모델 재정의
 
 ### 0-1. 도메인 모델 재정의 (`src/core/models.py`)
-- [ ] `LawArticle` — 유지 (필드 정리)
-- [ ] `Citation` — 유지 (판례 출처 필드 추가: `case_number`, `court`, `decision_date`)
-- [ ] `ComplianceReport` → **`LegalAnswer`** 로 교체
-  - `question: str`
-  - `answer: str`  (reasoning 텍스트)
-  - `citations: list[Citation]`
-  - `related_articles: list[str]`  (그래프 확장 조문 ID)
-  - `session_id: str`
-- [ ] `CaseArticle` (판례 전용 모델) 신규 추가
+- [x] `LawArticle` — 유지 (필드 정리)
+- [x] `Citation` — 유지 (판례 출처 필드 추가: `case_number`, `court`, `decision_date`)
+- [x] `ComplianceReport` → **`LegalAnswer`** 로 교체
+- [x] `CaseArticle` (판례 전용 모델) 신규 추가
 - [ ] TDD: `tests/core/test_models.py` 업데이트
 
 ### 0-2. 제거 대상 파일 목록 정리 후 삭제
@@ -62,16 +57,7 @@ src/api/routers/parse.py
 > law.go.kr Open API → 법령목록 → 법령본문 → 조문 파싱 → 청킹 → Qdrant
 
 ### 1-1. 부동산 도메인 법령 정의 (`src/collector/domain.py`)
-```python
-REAL_ESTATE_LAWS = [
-    "주택법", "공인중개사법", "부동산 거래신고 등에 관한 법률",
-    "건축법", "집합건물의 소유 및 관리에 관한 법률",
-    "토지이용규제 기본법", "도시 및 주거환경정비법",
-    "민법 (부동산 관련 편)", "부동산등기법",
-    "주택임대차보호법", "상가건물 임대차보호법",
-]
-```
-- [ ] TDD: `tests/collector/test_domain.py` — 법령명 목록 존재 확인
+- [x] TDD: `tests/collector/test_domain.py` — 법령명 목록 존재 확인
 
 ### 1-2. 법령목록 API (`src/collector/law_list_api.py`)
 - [x] `GET /DRF/lawSearch.do` — OC, target=law, type=JSON, query=법령명
