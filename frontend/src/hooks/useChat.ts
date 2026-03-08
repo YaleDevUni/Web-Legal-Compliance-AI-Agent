@@ -118,8 +118,8 @@ export function useChat() {
           queryKey: ['chatHistory', resolvedSessionId],
           queryFn: async () => {
             const res = await fetch(`/api/sessions/${resolvedSessionId}/history`);
-            if (!res.ok) return [];
-            return res.json() as Message[];
+            if (!res.ok) return [] as Message[];
+            return res.json() as Promise<Message[]>;
           },
         });
       }
