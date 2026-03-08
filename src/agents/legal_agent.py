@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from core.logger import logger
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from core.models import LegalAnswer, Citation
 from retrieval.hybrid import HybridRetriever
 from retrieval.graph_expander import GraphExpander
@@ -12,14 +12,17 @@ class LegalReasoningAgent:
     """부동산 법령 및 판례를 기반으로 법률 질문에 답변하는 에이전트"""
 
     _SYSTEM_PROMPT = (
-        "당신은 대한민국 부동산 법률 전문 보조 AI입니다. "
-        "제공된 [법령] 및 [판례] 컨텍스트를 바탕으로 사용자의 질문에 정확하고 논리적으로 답변하세요.\n\n"
-        "지침:\n"
-        "1. 반드시 제공된 컨텍스트 내의 조문을 인용하여 답변하세요.\n"
-        "2. 법령뿐만 아니라 관련 판례가 있다면 판결 요지를 바탕으로 구체적인 해석을 제공하세요.\n"
-        "3. 만약 컨텍스트만으로 답변이 부족하다면, 아는 범위 내에서 답변하되 '제공된 자료 외의 상식에 기반한 답변'임을 명시하세요.\n"
-        "4. 답변 마지막에는 반드시 '이 답변은 참고용이며 법적 효력을 갖지 않습니다. 실제 분쟁 시 전문가의 자문을 구하시기 바랍니다.'라는 면책 고지를 포함하세요.\n"
-        "5. 답변은 마크다운 형식을 사용하여 가독성 있게 작성하세요."
+        "당신은 대한민국 부동산 법률 전문 보조 AI입니다. 사용자와 자연스럽게 대화하면서 법률 질문에 전문적으로 답변합니다.\n\n"
+        "## 대화 방식\n"
+        "- '고마워', '알겠어', '잘 됐네' 같은 인사나 짧은 반응에는 간단하고 자연스럽게 답하세요. 법적 분석 불필요.\n"
+        "- '판례는 없어?', '더 설명해줘', '그럼 어떻게 해?' 같은 follow-up 질문은 **이전 대화 내용을 참고**하여 답하세요.\n"
+        "- 이전 대화가 있는 경우, 새 질문이 그 맥락의 연장선인지 파악하세요.\n\n"
+        "## 법률 질문 답변 지침\n"
+        "1. 제공된 [법령] 및 [판례] 컨텍스트를 우선 활용하세요.\n"
+        "2. 컨텍스트에 판례가 있으면 반드시 사건번호와 판결 요지를 인용하세요.\n"
+        "3. 컨텍스트만으로 부족하면 일반 법률 지식으로 보완하되, 그 사실을 밝히세요.\n"
+        "4. 실질적인 법률 답변에는 마지막에 면책 고지를 포함하세요: '이 답변은 참고용이며 법적 효력을 갖지 않습니다. 실제 분쟁 시 전문가의 자문을 구하시기 바랍니다.'\n"
+        "5. 마크다운 형식으로 가독성 있게 작성하세요."
     )
 
     def __init__(
@@ -59,10 +62,18 @@ class LegalReasoningAgent:
             SystemMessage(content=self._SYSTEM_PROMPT),
         ]
         if history:
-            for h in history[-5:]:
-                if h.get("role") == "user": messages.append(HumanMessage(content=h.get("content")))
-        
-        messages.append(HumanMessage(content=f"질문: {question}\n\n[컨텍스트]\n{context_str}"))
+            for h in history[-6:]:
+                role = h.get("role")
+                content = h.get("content", "")
+                if role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    messages.append(AIMessage(content=content))
+
+        user_msg = f"질문: {question}"
+        if context_str:
+            user_msg += f"\n\n[컨텍스트]\n{context_str}"
+        messages.append(HumanMessage(content=user_msg))
         
         # 제너레이터로 반환 (텍스트 토큰들 -> 마지막에 citations)
         full_answer = []
