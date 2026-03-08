@@ -116,7 +116,7 @@ class LegalReasoningAgent:
             processed_case_ids.add(case_id)
             
             lines.append(f"[판례] {meta.get('case_number')} ({meta.get('case_name')})\n{res['text']}")
-            citation_map[f"CASE_{case_id}"] = meta
+            citation_map[f"CASE_{case_id}"] = {**meta, "text": res["text"]}
             
         return "\n\n".join(lines), citation_map
 
