@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 import streamlit as st
 from qdrant_client import QdrantClient
+import redis as redis_lib
 
 from agents.orchestrator import Orchestrator
 from retrieval.hybrid import HybridRetriever
@@ -18,6 +19,7 @@ from input.file_loader import load_zip
 from core.models import ComplianceStatus
 from core.config import Settings
 from core.logger import logger
+from cache.url_cache import URLAnalysisCache
 
 @st.cache_resource
 def _get_retriever() -> HybridRetriever | None:
@@ -26,6 +28,17 @@ def _get_retriever() -> HybridRetriever | None:
         settings = Settings()
         client = QdrantClient(url=str(settings.qdrant_url), timeout=30)
         return HybridRetriever(client, collection=settings.qdrant_collection)
+    except Exception:
+        return None
+
+@st.cache_resource
+def _get_url_cache() -> URLAnalysisCache | None:
+    """URLAnalysisCache 싱글턴 — Redis 연결 실패 시 None 반환."""
+    try:
+        settings = Settings()
+        client = redis_lib.from_url(settings.redis_url, decode_responses=False)
+        client.ping()
+        return URLAnalysisCache(redis_client=client)
     except Exception:
         return None
 
@@ -58,6 +71,7 @@ def _render_citations(citations) -> None:
 tab_file, tab_zip, tab_url, tab_text = st.tabs(["📄 파일 분석", "📦 ZIP 프로젝트 분석", "🌐 URL 분석", "💬 코드/텍스트 직접 입력"])
 
 input_text: str | None = None
+current_url: str | None = None  # URL 탭에서 입력한 URL (캐시 키로 사용)
 
 with tab_file:
     uploaded = st.file_uploader(
@@ -92,6 +106,7 @@ with tab_url:
         try:
             parsed = parse_url(url_input)
             input_text = parsed["combined"]
+            current_url = url_input
             n_sub = len(parsed.get("subpages", []))
             sub_titles = ", ".join(s["title"] for s in parsed.get("subpages", []))
             st.success(f"URL 파싱 완료 — {len(input_text)}자 추출 (법적 서브페이지 {n_sub}개{': ' + sub_titles if sub_titles else ''})")
@@ -115,15 +130,25 @@ if st.button("🔍 준수 여부 분석", type="primary", disabled=not input_tex
     if not input_text:
         st.warning("분석할 내용을 먼저 입력하세요.")
     else:
-        with st.spinner("AI 에이전트 분석 중..."):
-            try:
-                retriever = _get_retriever()
-                orchestrator = Orchestrator(retriever=retriever)
-                reports = orchestrator.run(input_text)
-            except Exception as e:
-                logger.exception("분석 중 오류 발생:") # Added console logging
-                st.error(f"분석 오류: {e}")
-                reports = []
+        # URL 탭 입력이면 캐시 확인
+        url_cache = _get_url_cache()
+        cached = url_cache.get(current_url) if (url_cache and current_url) else None
+
+        if cached is not None:
+            reports = cached
+            st.info("⚡ 캐시된 결과를 사용합니다. (동일 URL 이전 분석 결과)")
+        else:
+            with st.spinner("AI 에이전트 분석 중..."):
+                try:
+                    retriever = _get_retriever()
+                    orchestrator = Orchestrator(retriever=retriever)
+                    reports = orchestrator.run(input_text)
+                    if url_cache and current_url:
+                        url_cache.set(current_url, reports)
+                except Exception as e:
+                    logger.exception("분석 중 오류 발생:")
+                    st.error(f"분석 오류: {e}")
+                    reports = []
 
         if not reports:
             st.info("분석 결과가 없습니다. 법령 관련 코드를 입력해주세요.")
