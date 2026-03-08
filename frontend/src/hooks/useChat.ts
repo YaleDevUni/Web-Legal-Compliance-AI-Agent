@@ -34,6 +34,9 @@ export function useChat() {
 
   const [streamingAnswer, setStreamingAnswer] = useState('');
   const [currentCitations, setCurrentCitations] = useState<Citation[]>([]);
+  const [activeCitationId, setActiveCitationId] = useState<string | null>(null);
+  // 현재 진행 중인 사용자 질문 (즉시 UI 반영용)
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +58,9 @@ export function useChat() {
     setSessionId('');
     queryClient.setQueryData(['chatHistory', ''], []);
     setCurrentCitations([]);
+    setActiveCitationId(null);
     setStreamingAnswer('');
+    setPendingUserMessage(null);
   }, [queryClient]);
 
   // 질문 전송 (SSE)
@@ -63,10 +68,12 @@ export function useChat() {
     setLoading(true);
     setError(null);
     setStreamingAnswer('');
-    
-    // 임시 질문을 히스토리에 미리 추가 (UI용)
-    // 실제 업데이트는 refetchHistory로 수행됨
-    
+    setActiveCitationId(null);
+    // 사용자 메시지 즉시 표시
+    setPendingUserMessage(question);
+
+    let resolvedSessionId = sessionId;
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -94,28 +101,49 @@ export function useChat() {
             const ev = payload as ChatCitationsEvent;
             setCurrentCitations(ev.citations);
             if (!sessionId) {
+              resolvedSessionId = ev.session_id;
               setSessionId(ev.session_id);
               localStorage.setItem(SESSION_KEY, ev.session_id);
             }
           } else if (event === 'error') {
             setError(payload.message);
-          } else if (event === 'done') {
-            setLoading(false);
-            refetchHistory(); // 최종 답변 완료 후 히스토리 갱신
           }
+          // done은 루프 밖에서 처리
+        });
+      }
+
+      // 스트림 종료 후: history 갱신 → streamingAnswer + pendingUserMessage 제거
+      if (resolvedSessionId) {
+        await queryClient.fetchQuery({
+          queryKey: ['chatHistory', resolvedSessionId],
+          queryFn: async () => {
+            const res = await fetch(`/api/sessions/${resolvedSessionId}/history`);
+            if (!res.ok) return [];
+            return res.json() as Message[];
+          },
         });
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setStreamingAnswer('');
+      setPendingUserMessage(null);
       setLoading(false);
     }
-  }, [sessionId, refetchHistory]);
+  }, [sessionId, queryClient]);
+
+  // history에 pendingUserMessage 병합 (서버 확정 전까지만)
+  const displayHistory: Message[] = pendingUserMessage
+    ? [...history, { role: 'user', content: pendingUserMessage }]
+    : history;
 
   return {
     sessionId,
-    history,
+    history: displayHistory,
     streamingAnswer,
     currentCitations,
+    activeCitationId,
+    setActiveCitationId,
     loading,
     error,
     ask,

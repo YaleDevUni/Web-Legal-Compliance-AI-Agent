@@ -1,18 +1,74 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { Message } from '../types';
+import type { Message, Citation } from '../types';
 
 interface ChatPanelProps {
   history: Message[];
   streamingAnswer: string;
   loading: boolean;
+  citations: Citation[];
+  activeCitationId: string | null;
+  onCitationClick: (id: string) => void;
   onSend: (text: string) => void;
   onReset: () => void;
+}
+
+/** 텍스트에서 citation 패턴을 찾아 [N] 클릭 마커를 삽입한다 */
+function renderWithCitations(
+  text: string,
+  citations: Citation[],
+  activeCitationId: string | null,
+  onCitationClick: (id: string) => void
+): React.ReactNode {
+  if (!citations.length) return <>{text}</>;
+
+  // 패턴 길이 내림차순 정렬 (긴 패턴 우선 매칭)
+  const patterns = citations
+    .map((c, i) => ({
+      pattern: `${c.law_name} ${c.article_number}`,
+      index: i + 1,
+      id: c.article_id,
+    }))
+    .sort((a, b) => b.pattern.length - a.pattern.length);
+
+  const escaped = patterns.map((p) =>
+    p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  const regex = new RegExp(`(${escaped.join('|')})`, 'g');
+  const parts = text.split(regex);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = patterns.find((p) => p.pattern === part);
+        if (!match) return <span key={i}>{part}</span>;
+        const isActive = activeCitationId === match.id;
+        return (
+          <span key={i}>
+            {part}
+            <button
+              onClick={() => onCitationClick(match.id)}
+              className={`inline-flex items-center justify-center w-[18px] h-[18px] ml-0.5 text-[9px] font-bold rounded cursor-pointer align-super transition-colors ${
+                isActive
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+              }`}
+            >
+              {match.index}
+            </button>
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   history,
   streamingAnswer,
   loading,
+  citations,
+  activeCitationId,
+  onCitationClick,
   onSend,
   onReset,
 }) => {
@@ -32,12 +88,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInput('');
   };
 
+  // 마지막 assistant 메시지 인덱스 (citation 마커 적용 대상)
+  const lastAssistantIdx = history.reduceRight(
+    (found, msg, i) => (found === -1 && msg.role === 'assistant' ? i : found),
+    -1
+  );
+
   return (
     <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
       {/* 헤더 */}
       <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
         <h2 className="font-semibold text-slate-700">💬 법률 상담</h2>
-        <button 
+        <button
           onClick={onReset}
           className="text-xs text-slate-400 hover:text-red-500 transition-colors"
         >
@@ -56,12 +118,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
         {history.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm ${
-              msg.role === 'user' 
-                ? 'bg-blue-600 text-white rounded-tr-none' 
-                : 'bg-slate-100 text-slate-800 rounded-tl-none'
-            }`}>
-              <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+            <div
+              className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm ${
+                msg.role === 'user'
+                  ? 'bg-blue-600 text-white rounded-tr-none'
+                  : 'bg-slate-100 text-slate-800 rounded-tl-none'
+              }`}
+            >
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {msg.role === 'assistant' && i === lastAssistantIdx && citations.length > 0
+                  ? renderWithCitations(msg.content, citations, activeCitationId, onCitationClick)
+                  : msg.content}
+              </p>
             </div>
           </div>
         ))}
@@ -69,8 +137,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         {streamingAnswer && (
           <div className="flex justify-start">
             <div className="max-w-[85%] px-4 py-2.5 rounded-2xl text-sm bg-slate-100 text-slate-800 rounded-tl-none border-l-4 border-blue-400">
-              <p className="whitespace-pre-wrap leading-relaxed">{streamingAnswer}</p>
-              {loading && <span className="inline-block w-1 h-4 ml-1 bg-blue-400 animate-pulse align-middle" />}
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {citations.length > 0
+                  ? renderWithCitations(streamingAnswer, citations, activeCitationId, onCitationClick)
+                  : streamingAnswer}
+                {loading && (
+                  <span className="inline-block w-1 h-4 ml-1 bg-blue-400 animate-pulse align-middle" />
+                )}
+              </p>
             </div>
           </div>
         )}

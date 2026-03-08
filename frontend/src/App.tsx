@@ -3,14 +3,16 @@ import { CitationPanel } from './components/CitationPanel';
 import { useChat } from './hooks/useChat';
 
 function App() {
-  const { 
-    history, 
-    streamingAnswer, 
-    currentCitations, 
-    loading, 
-    error, 
-    ask, 
-    resetSession 
+  const {
+    history,
+    streamingAnswer,
+    currentCitations,
+    activeCitationId,
+    setActiveCitationId,
+    loading,
+    error,
+    ask,
+    resetSession,
   } = useChat();
 
   return (
@@ -43,18 +45,25 @@ function App() {
               <button onClick={() => window.location.reload()} className="text-xs font-bold hover:underline">새로고침</button>
             </div>
           )}
-          <ChatPanel 
-            history={history} 
-            streamingAnswer={streamingAnswer} 
-            loading={loading} 
+          <ChatPanel
+            history={history}
+            streamingAnswer={streamingAnswer}
+            loading={loading}
+            citations={currentCitations}
+            activeCitationId={activeCitationId}
+            onCitationClick={setActiveCitationId}
             onSend={ask}
             onReset={resetSession}
           />
         </div>
 
         {/* 오른쪽: 인용 (30%) */}
-        <div className="flex-[3] min-w-[300px] h-full hidden lg:block">
-          <CitationPanel citations={currentCitations} />
+        <div className="flex-3 min-w-75 h-full hidden lg:block">
+          <CitationPanel
+            citations={currentCitations}
+            activeCitationId={activeCitationId}
+            onCitationClick={setActiveCitationId}
+          />
         </div>
       </main>
     </div>
