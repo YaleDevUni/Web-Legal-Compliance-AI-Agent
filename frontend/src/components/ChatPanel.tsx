@@ -17,7 +17,10 @@ interface ChatPanelProps {
 
 const CITE_RE = /^%%CITE:([^:]+):(\d+)%%$/;
 
-/** citation 패턴을 특수 마커(인라인 코드)로 치환 — ReactMarkdown이 code로 파싱함 */
+/** citation 패턴을 특수 마커(인라인 코드)로 치환 — ReactMarkdown이 code로 파싱함
+ *  **패턴** / *패턴* 등 마크다운 강조 안에 있어도 닫는 기호 밖에 마커를 붙여
+ *  볼드/이탤릭이 깨지지 않게 한다.
+ */
 function injectCiteMarkers(
   text: string,
   patterns: Array<{ pattern: string; id: string; index: number }>
@@ -25,9 +28,10 @@ function injectCiteMarkers(
   let result = text;
   for (const p of patterns) {
     const esc = p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 1~3개 * 또는 _ 로 감싼 패턴 전체를 먼저 시도, 없으면 일반 텍스트 매칭
     result = result.replace(
-      new RegExp(esc, 'g'),
-      `${p.pattern}\`%%CITE:${p.id}:${p.index}%%\``
+      new RegExp(`(\\*{1,3}${esc}\\*{1,3}|_{1,3}${esc}_{1,3}|${esc})`, 'g'),
+      `$1\`%%CITE:${p.id}:${p.index}%%\``
     );
   }
   return result;
