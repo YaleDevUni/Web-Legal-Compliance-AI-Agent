@@ -70,18 +70,15 @@
 - [x] TDD: `tests/collector/test_law_content_api.py`
 
 ### 1-4. 판례 API (`src/collector/case_api.py`)
-- [ ] 법원 판례정보 Open API (`/DRF/lawSearch.do?target=prec`)
-- [ ] 부동산 키워드 목록으로 판례 수집:
+- [x] 법원 판례정보 Open API (`/DRF/lawSearch.do?target=prec`)
+- [x] 부동산 키워드 목록으로 판례 수집:
   ```
   ["전세사기", "임대차", "매매계약", "분양", "재개발",
    "공인중개사", "하자담보", "명도소송", "유치권", "저당권",
    "전세권", "임차권등기명령", "계약갱신청구권"]
   ```
-- [ ] `CaseArticle` 모델로 파싱 (사건번호, 법원명, 선고일, 판시사항, 판결요지, 참조조문)
-- [ ] TDD: `tests/collector/test_case_api.py`
-  - `test_fetch_cases_by_keyword()`
-  - `test_parse_case_to_model()`
-  - `test_reference_articles_extracted()` — 판례 내 참조조문 파싱
+- [x] `CaseArticle` 모델로 파싱 (사건번호, 법원명, 선고일, 판시사항, 판결요지, 참조조문)
+- [x] TDD: `tests/collector/test_case_api.py`
 
 ### 1-5. 수집 스케줄러 업데이트 (`src/collector/scheduler.py`)
 - [ ] 법령본문 + 판례 통합 스케줄러
