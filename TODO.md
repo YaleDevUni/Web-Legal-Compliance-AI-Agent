@@ -30,20 +30,18 @@
 - [ ] TDD: `tests/core/test_models.py` 업데이트
 
 ### 0-2. 제거 대상 파일 목록 정리 후 삭제
-```
-src/input/url_parser.py
-src/input/file_loader.py
-src/input/token_splitter.py
-src/agents/privacy_agent.py
-src/agents/security_agent.py
-src/agents/service_agent.py
-src/agents/orchestrator.py
-src/cache/url_cache.py
-src/api/routers/parse.py
-```
+- [x] `api/routers/parse.py`
+- [x] `src/input/url_parser.py`
+- [x] `src/input/file_loader.py`
+- [x] `src/input/token_splitter.py`
+- [x] `src/agents/privacy_agent.py`
+- [x] `src/agents/security_agent.py`
+- [x] `src/agents/service_agent.py`
+- [x] `src/agents/orchestrator.py`
+- [x] `src/cache/url_cache.py`
 
 ### 0-3. 테스트 정리
-- [ ] 웹 분석 관련 테스트 삭제
+- [x] 웹 분석 관련 테스트 삭제
   - `tests/input/` 전체
   - `tests/agents/test_orchestrator.py`, `test_privacy_agent.py`, `test_security_agent.py`, `test_service_agent.py`
   - `tests/cache/test_url_cache.py`
