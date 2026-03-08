@@ -143,11 +143,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInput('');
   };
 
-  const lastAssistantIdx = history.reduceRight(
-    (found, msg, i) => (found === -1 && msg.role === 'assistant' ? i : found),
-    -1
-  );
-
   return (
     <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
       {/* 헤더 */}
@@ -182,7 +177,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               {msg.role === 'assistant' ? (
                 <AssistantMarkdown
                   text={msg.content}
-                  citations={i === lastAssistantIdx ? citations : []}
+                  citations={citations}
                   activeCitationId={activeCitationId}
                   onCitationClick={onCitationClick}
                 />

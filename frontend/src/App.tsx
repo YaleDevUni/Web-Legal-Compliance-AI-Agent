@@ -6,7 +6,7 @@ function App() {
   const {
     history,
     streamingAnswer,
-    currentCitations,
+    citations,
     activeCitationId,
     setActiveCitationId,
     loading,
@@ -49,7 +49,7 @@ function App() {
             history={history}
             streamingAnswer={streamingAnswer}
             loading={loading}
-            citations={currentCitations}
+            citations={citations}
             activeCitationId={activeCitationId}
             onCitationClick={setActiveCitationId}
             onSend={ask}
@@ -60,7 +60,7 @@ function App() {
         {/* 오른쪽: 인용 (30%) */}
         <div className="flex-3 min-w-75 h-full hidden lg:block">
           <CitationPanel
-            citations={currentCitations}
+            citations={citations}
             activeCitationId={activeCitationId}
             onCitationClick={setActiveCitationId}
           />
