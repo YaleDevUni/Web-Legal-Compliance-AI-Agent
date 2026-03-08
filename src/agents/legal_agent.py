@@ -12,18 +12,18 @@ class LegalReasoningAgent:
     """부동산 법령 및 판례를 기반으로 법률 질문에 답변하는 에이전트"""
 
     _SYSTEM_PROMPT = (
-        "당신은 대한민국 부동산 법률 전문 보조 AI입니다. 사용자와 자연스럽게 대화하면서 법률 질문에 전문적으로 답변합니다.\n\n"
+        "당신은 대한민국 부동산 법률 전문 보조 AI입니다. 사용자와 자연스럽게 대화하면서 제공된 [법령] 및 [판례] 컨텍스트를 기반으로 전문적으로 답변합니다.\n\n"
+        "## 답변 규칙 (필수)\n"
+        "1. 제공된 컨텍스트(법령 및 판례)를 **반드시** 우선적으로 활용하여 답변하세요.\n"
+        "2. 답변 본문에는 근거가 되는 **법령 명칭과 조항 번호(예: 주택임대차보호법 제3조)** 또는 **판례 사건번호(예: 2024다123456)**를 반드시 직접 언급하세요.\n"
+        "3. 명칭 언급 바로 뒤에는 해당 컨텍스트의 순서 번호를 사용하여 **인용 마커**를 추가하세요. (예: '주택임대차보호법 제3조[1]에 따르면...', '대법원 판례(2022다311736)[3]에 의하면...')\n"
+        "4. 판례 인용 시 사건번호와 함께 판결 요지를 상세히 설명하세요. 판례 인용을 절대 생략하지 마세요.\n"
+        "5. 컨텍스트만으로 부족한 경우 일반 법률 지식으로 보완하되, '제공된 자료 외의 일반 지식'임을 명시하세요.\n"
+        "6. 답변 마지막에 면책 고지를 포함하세요: '이 답변은 참고용이며 법적 효력을 갖지 않습니다. 실제 분쟁 시 전문가의 자문을 구하시기 바랍니다.'\n\n"
         "## 대화 방식\n"
-        "- '고마워', '알겠어', '잘 됐네' 같은 인사나 짧은 반응에는 간단하고 자연스럽게 답하세요. 법적 분석 불필요.\n"
-        "- '판례는 없어?', '더 설명해줘', '그럼 어떻게 해?' 같은 follow-up 질문은 **이전 대화 내용을 참고**하여 답하세요.\n"
-        "- 이전 대화가 있는 경우, 새 질문이 그 맥락의 연장선인지 파악하세요.\n\n"
-        "## 법률 질문 답변 지침\n"
-        "1. 제공된 [법령] 및 [판례] 컨텍스트를 우선 활용하세요.\n"
-        "2. 컨텍스트에 [판례] 섹션이 하나라도 있으면 **반드시** 해당 사건번호를 답변 본문에 직접 언급하세요. 판례를 절대 생략하지 마세요.\n"
-        "3. 판례 인용 시 사건번호(예: 2024다123456)와 판결 요지를 함께 서술하세요.\n"
-        "4. 컨텍스트만으로 부족하면 일반 법률 지식으로 보완하되, 그 사실을 밝히세요.\n"
-        "5. 실질적인 법률 답변에는 마지막에 면책 고지를 포함하세요: '이 답변은 참고용이며 법적 효력을 갖지 않습니다. 실제 분쟁 시 전문가의 자문을 구하시기 바랍니다.'\n"
-        "6. 마크다운 형식으로 가독성 있게 작성하세요."
+        "- 일상적인 인사는 짧고 친절하게 답하세요.\n"
+        "- 이전 대화가 있는 경우 맥락을 유지하여 follow-up 질문에 답변하세요.\n"
+        "- 마크다운 형식을 사용하여 가독성 있게 작성하세요."
     )
 
     def __init__(
@@ -58,6 +58,14 @@ class LegalReasoningAgent:
         citations = self._make_citations(citation_map)
         related_ids = [res["metadata"].get("article_id") for res in expanded_results if "article_id" in res["metadata"]]
 
+        # [변경] 스트리밍 시작 전에 인용 정보를 먼저 전달하여 프론트엔드가 즉시 매칭할 수 있게 함
+        yield {
+            "type": "citations", 
+            "citations": citations, 
+            "related_articles": related_ids,
+            "full_answer": "" # 아직 답변 전
+        }
+
         # 5. LLM 스트리밍 추론
         messages = [
             SystemMessage(content=self._SYSTEM_PROMPT),
@@ -76,7 +84,6 @@ class LegalReasoningAgent:
             user_msg += f"\n\n[컨텍스트]\n{context_str}"
         messages.append(HumanMessage(content=user_msg))
         
-        # 제너레이터로 반환 (텍스트 토큰들 -> 마지막에 citations)
         full_answer = []
         async for chunk in self._llm.astream(messages):
             content = chunk.content
@@ -84,6 +91,7 @@ class LegalReasoningAgent:
                 full_answer.append(content)
                 yield {"type": "content", "text": content}
         
+        # 마지막에 완료 신호와 함께 전체 답변 전달 (세션 저장용)
         yield {
             "type": "citations", 
             "citations": citations, 
@@ -95,6 +103,7 @@ class LegalReasoningAgent:
         """검색 결과로부터 LLM 컨텍스트 문자열과 메타데이터 맵을 생성한다."""
         lines = []
         citation_map = {}
+        idx = 1
         
         # 법령 조문 합치기 (중복 제거)
         processed_law_ids = set()
@@ -105,8 +114,9 @@ class LegalReasoningAgent:
             processed_law_ids.add(art_id)
             
             content = meta.get("full_content") or res["text"]
-            lines.append(f"[법령] {meta.get('law_name')} {meta.get('article_number')}\n{content}")
+            lines.append(f"[{idx}] [법령] {meta.get('law_name')} {meta.get('article_number')}\n{content}")
             citation_map[art_id] = meta
+            idx += 1
             
         # 판례 합치기
         processed_case_ids = set()
@@ -116,8 +126,9 @@ class LegalReasoningAgent:
             if not case_id or case_id in processed_case_ids: continue
             processed_case_ids.add(case_id)
             
-            lines.append(f"[판례] {meta.get('case_number')} ({meta.get('case_name')})\n{res['text']}")
+            lines.append(f"[{idx}] [판례] {meta.get('case_number')} ({meta.get('case_name')})\n{res['text']}")
             citation_map[f"CASE_{case_id}"] = {**meta, "text": res["text"]}
+            idx += 1
             
         return "\n\n".join(lines), citation_map
 

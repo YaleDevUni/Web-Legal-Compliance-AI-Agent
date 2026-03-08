@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from 'react';
 import type { Citation } from '../types';
-import { idxToLabel } from '../utils/citationLabel';
 
 interface CitationPanelProps {
   citations: Citation[];
@@ -27,7 +26,9 @@ export const CitationPanel: React.FC<CitationPanelProps> = ({
   return (
     <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-        <h2 className="font-semibold text-slate-700">📑 관련 근거</h2>
+        <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+          <span className="text-blue-500">📑</span> 관련 근거
+        </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -63,7 +64,7 @@ export const CitationPanel: React.FC<CitationPanelProps> = ({
                         isActive ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
                       }`}
                     >
-                      {idxToLabel(i + 1)}
+                      {i + 1}
                     </span>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
