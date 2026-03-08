@@ -1,12 +1,45 @@
 # 부동산 법률 AI 상담사
 
 > 대한민국 부동산 법령 및 판례를 기반으로 실시간 법률 상담을 제공하는 RAG(Retrieval-Augmented Generation) 시스템
+>
+> law.go.kr 공식 API로 수집한 주택임대차보호법·부동산등기법 등 핵심 법령을 BM25 + 벡터 하이브리드 검색(RRF)으로 인덱싱하고,
+> GPT-4o-mini 기반 멀티 에이전트가 질문을 분석해 조문 단위 인용(Citation)과 SHA-256 무결성 검증을 포함한 답변을 Server-Sent Events로 스트리밍합니다.
+> 시맨틱 캐싱(Qdrant)과 Redis Stream LLM 큐잉으로 다수 동시 요청에도 안정적인 응답 품질을 유지합니다.
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18-blue)](https://react.dev)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-red)](https://qdrant.tech)
+[![Redis](https://img.shields.io/badge/Redis-7-red)](https://redis.io)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
+---
+
+## Demo
+
+> **Ask a question — get a cited, streamed legal answer in seconds.**
+
+![Demo](public/demo1.png)
+
+**Sample questions to try:**
+- `"전세 계약 만료 후 집주인이 보증금을 안 돌려주면 어떻게 해야 하나요?"`
+- `"임대인이 갑자기 집을 팔겠다고 하는데 저는 계속 살 수 있나요?"`
+- `"전세사기 피해를 예방하는 방법과 관련 법령을 알려주세요"`
+
+---
+
+## Highlights
+
+| | Feature | Detail |
+|--|---------|--------|
+| **Real-time Streaming** | SSE token streaming | Answers appear word-by-word; no waiting for full response |
+| **Cited Answers** | Article-level citations | Every legal claim links to the exact statute + URL |
+| **Hybrid Search** | BM25 + Vector + RRF | Keyword precision meets semantic recall |
+| **Law Graph** | NetworkX + Force-Graph | Visualizes cross-references between statutes interactively |
+| **Semantic Cache** | Qdrant cosine similarity | Similar questions reuse cached answers — ~25x faster, $0 API cost |
+| **SHA-256 Integrity** | SQLite audit trail | Detects statute amendments; incremental re-indexing only |
+| **LLM Queue** | Redis Stream Consumer Group | Handles traffic spikes without hitting OpenAI rate limits |
+| **Multi-worker** | `--workers $(nproc)` | Bypasses Python GIL — linear throughput scaling |
 
 ---
 
