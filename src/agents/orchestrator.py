@@ -1,5 +1,6 @@
 """agents/orchestrator.py — 멀티 에이전트 오케스트레이터"""
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
@@ -54,9 +55,10 @@ class Orchestrator:
         "서비스": ServiceAgent,
     }
 
-    def __init__(self, retriever=None, model: str = "gpt-4o-mini") -> None:
+    def __init__(self, retriever=None, model: str = "gpt-4o-mini", stream=None) -> None:
         self._retriever = retriever
         self._llm = ChatOpenAI(model=model, temperature=0)
+        self._stream = stream  # RedisStream 인스턴스 (옵션)
 
     def _extract_search_query(self, code_text: str) -> str:
         """코드/HTML → 법령 벡터 검색에 최적화된 자연어 쿼리 1회 추출."""
@@ -101,16 +103,33 @@ class Orchestrator:
             else code_text
         )
 
-        # 3. 목적에 맞는 에이전트 동적 실행
+        # 3. 목적에 맞는 에이전트 병렬 실행
+        agents_to_run = {
+            law_name: self._AGENT_MAP[law_name](retriever=self._retriever)
+            for law_name in required_laws
+            if law_name in self._AGENT_MAP
+        }
+        unknown = [l for l in required_laws if l not in self._AGENT_MAP]
+        for u in unknown:
+            logger.warning(f"'{u}'에 해당하는 에이전트를 찾을 수 없습니다.")
+
         raw: list[ComplianceReport] = []
-        for law_name in required_laws:
-            agent_class = self._AGENT_MAP.get(law_name)
-            if agent_class:
-                agent = agent_class(retriever=self._retriever)
-                logger.info(f"'{law_name}' 분야 분석을 위해 {agent.__class__.__name__} 실행...")
-                raw.extend(agent.analyze(code_text, search_query=search_query))
-            else:
-                logger.warning(f"'{law_name}'에 해당하는 에이전트를 찾을 수 없습니다.")
+        with ThreadPoolExecutor(max_workers=len(agents_to_run) or 1) as executor:
+            futures = {
+                executor.submit(agent.analyze, code_text, search_query): law_name
+                for law_name, agent in agents_to_run.items()
+            }
+            for future in as_completed(futures):
+                law_name = futures[future]
+                try:
+                    reports = future.result()
+                    logger.info(f"[{law_name}] 완료: {len(reports)}개 보고서")
+                    raw.extend(reports)
+                    if self._stream:
+                        for r in reports:
+                            self._stream.publish(law_name, r.model_dump(mode="json"))
+                except Exception as e:
+                    logger.error(f"[{law_name}] 에이전트 실행 실패: {e}")
 
         # 4. 결과 후처리
         _DEFAULT_SHA = "0" * 64

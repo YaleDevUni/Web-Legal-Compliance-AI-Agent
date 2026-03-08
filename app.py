@@ -20,6 +20,7 @@ from core.models import ComplianceStatus
 from core.config import Settings
 from core.logger import logger
 from cache.url_cache import URLAnalysisCache
+from streaming.redis_stream import RedisStream
 
 @st.cache_resource
 def _get_retriever() -> HybridRetriever | None:
@@ -32,15 +33,23 @@ def _get_retriever() -> HybridRetriever | None:
         return None
 
 @st.cache_resource
-def _get_url_cache() -> URLAnalysisCache | None:
-    """URLAnalysisCache 싱글턴 — Redis 연결 실패 시 None 반환."""
+def _get_redis_client():
+    """Redis 클라이언트 싱글턴 — 연결 실패 시 None."""
     try:
         settings = Settings()
         client = redis_lib.from_url(settings.redis_url, decode_responses=False)
         client.ping()
-        return URLAnalysisCache(redis_client=client)
+        return client
     except Exception:
         return None
+
+def _get_url_cache() -> URLAnalysisCache | None:
+    rc = _get_redis_client()
+    return URLAnalysisCache(redis_client=rc) if rc else None
+
+def _get_stream() -> RedisStream | None:
+    rc = _get_redis_client()
+    return RedisStream(redis_client=rc) if rc else None
 
 st.set_page_config(
     page_title="Web Legal Compliance AI Agent",
@@ -141,7 +150,7 @@ if st.button("🔍 준수 여부 분석", type="primary", disabled=not input_tex
             with st.spinner("AI 에이전트 분석 중..."):
                 try:
                     retriever = _get_retriever()
-                    orchestrator = Orchestrator(retriever=retriever)
+                    orchestrator = Orchestrator(retriever=retriever, stream=_get_stream())
                     reports = orchestrator.run(input_text)
                     if url_cache and current_url:
                         url_cache.set(current_url, reports)
