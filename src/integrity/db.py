@@ -1,13 +1,16 @@
-"""src/integrity/db.py — SHA-256 이력 관리 SQLite CRUD"""
+"""src/integrity/db.py — SHA-256 및 조문 본문 관리 SQLite"""
 import sqlite3
 from datetime import datetime
-
+from typing import List, Dict, Any, Optional
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS article_hashes (
-    article_id  TEXT PRIMARY KEY,
-    sha256      TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
+    article_id      TEXT PRIMARY KEY,
+    law_name        TEXT,
+    article_number  TEXT,
+    content         TEXT,
+    sha256          TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS article_history (
@@ -18,7 +21,6 @@ CREATE TABLE IF NOT EXISTS article_history (
 );
 """
 
-
 class ArticleDB:
     def __init__(self, db_path: str = "data/sqlite/articles.db") -> None:
         self._conn = sqlite3.connect(db_path)
@@ -26,7 +28,13 @@ class ArticleDB:
         self._conn.executescript(_DDL)
         self._conn.commit()
 
-    def upsert(self, article_id: str, sha256: str, updated_at: datetime) -> bool:
+    def upsert(self, 
+               article_id: str, 
+               sha256: str, 
+               updated_at: datetime, 
+               law_name: str = "", 
+               article_number: str = "", 
+               content: str = "") -> bool:
         """조항을 upsert하고 해시 변경 여부를 반환한다."""
         cur = self._conn.execute(
             "SELECT sha256 FROM article_hashes WHERE article_id = ?",
@@ -34,16 +42,22 @@ class ArticleDB:
         )
         row = cur.fetchone()
 
+        # 해시가 동일하면 업데이트 스킵 (단, 처음 저장 시 content가 비어있었다면 채워야 할 수도 있지만 여기선 해시 기준)
         if row is not None and row["sha256"] == sha256:
-            return False  # 변경 없음
+            return False
 
         self._conn.execute(
             """
-            INSERT INTO article_hashes (article_id, sha256, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(article_id) DO UPDATE SET sha256 = excluded.sha256, updated_at = excluded.updated_at
+            INSERT INTO article_hashes (article_id, law_name, article_number, content, sha256, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(article_id) DO UPDATE SET 
+                law_name = excluded.law_name,
+                article_number = excluded.article_number,
+                content = excluded.content,
+                sha256 = excluded.sha256, 
+                updated_at = excluded.updated_at
             """,
-            (article_id, sha256, updated_at.isoformat()),
+            (article_id, law_name, article_number, content, sha256, updated_at.isoformat()),
         )
         self._conn.execute(
             "INSERT INTO article_history (article_id, sha256, recorded_at) VALUES (?, ?, ?)",
@@ -52,43 +66,28 @@ class ArticleDB:
         self._conn.commit()
         return True
 
-    def get_hash(self, article_id: str) -> str | None:
+    def get_all_articles(self) -> List[Dict[str, Any]]:
+        """모든 조문 데이터를 가져온다."""
+        cur = self._conn.execute("SELECT * FROM article_hashes")
+        return [dict(r) for r in cur.fetchall()]
+
+    def find_article_id_by_law_and_num(self, law_name: str, article_number: str) -> Optional[str]:
+        """법령명과 조번호로 article_id를 정확히 찾는다."""
+        # 정확한 매칭을 위해 LIKE 대신 = 사용 (수집 시 저장된 데이터 기준)
+        cur = self._conn.execute(
+            "SELECT article_id FROM article_hashes WHERE law_name = ? AND article_number = ?",
+            (law_name, article_number),
+        )
+        row = cur.fetchone()
+        return row["article_id"] if row else None
+
+    def get_hash(self, article_id: str) -> Optional[str]:
         cur = self._conn.execute(
             "SELECT sha256 FROM article_hashes WHERE article_id = ?",
             (article_id,),
         )
         row = cur.fetchone()
         return row["sha256"] if row else None
-
-    def get_info(self, article_id: str) -> dict | None:
-        """article_id로 sha256·updated_at 조회. 없으면 None."""
-        cur = self._conn.execute(
-            "SELECT sha256, updated_at FROM article_hashes WHERE article_id = ?",
-            (article_id,),
-        )
-        row = cur.fetchone()
-        if row is None:
-            return None
-        return {"sha256": row["sha256"], "updated_at": row["updated_at"]}
-
-    def find_by_law(self, law_name: str, article_number: str) -> dict | None:
-        """law_name + article_number로 sha256·updated_at 조회. 없으면 None."""
-        cur = self._conn.execute(
-            "SELECT article_id, sha256, updated_at FROM article_hashes "
-            "WHERE article_id LIKE ? ORDER BY updated_at DESC LIMIT 1",
-            (f"%{law_name}%{article_number}%",),
-        )
-        row = cur.fetchone()
-        if row is None:
-            return None
-        return {"sha256": row["sha256"], "updated_at": row["updated_at"]}
-
-    def get_history(self, article_id: str) -> list[dict]:
-        cur = self._conn.execute(
-            "SELECT sha256, recorded_at FROM article_history WHERE article_id = ? ORDER BY id",
-            (article_id,),
-        )
-        return [dict(r) for r in cur.fetchall()]
 
     def close(self) -> None:
         self._conn.close()

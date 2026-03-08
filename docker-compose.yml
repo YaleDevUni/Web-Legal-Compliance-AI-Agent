@@ -26,21 +26,8 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - REDIS_URL=redis://redis:6379
-    depends_on:
-      - qdrant
-      - redis
-    restart: unless-stopped
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    command: ["python", "-m", "workers.agent_worker"]
-    env_file:
-      - .env
-    environment:
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379
+    volumes:
+      - shared_data:/app/data
     depends_on:
       - qdrant
       - redis
@@ -56,7 +43,7 @@ services:
       - api
     restart: unless-stopped
 
-
 volumes:
   qdrant_data:
   redis_data:
+  shared_data:

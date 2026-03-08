@@ -1,80 +1,80 @@
-"""tests/collector/test_scheduler.py — APScheduler mock TDD
-
-테스트 전략:
-- BackgroundScheduler를 mocker.patch로 대체하여 실제 스케줄링 없이 동작 검증
-- _collect_and_check(): fetch_all → upsert → 변경 id 반환 전체 흐름 확인
-- start(): add_job / start 호출 여부로 스케줄 등록 검증
-"""
+"""tests/collector/test_scheduler.py — 통합 수집 스케줄러 TDD"""
 import pytest
-from unittest.mock import MagicMock, patch, call
 from datetime import datetime
-
-
-@pytest.fixture
-def mock_api(mocker):
-    api = mocker.MagicMock()
-    api.fetch_all.return_value = []
-    return api
-
+from core.models import LawArticle, CaseArticle
+from collector.scheduler import LegalDataCollector, LawScheduler
 
 @pytest.fixture
-def mock_db(mocker):
-    db = mocker.MagicMock()
-    db.upsert.return_value = True
-    return db
+def mock_clients(mocker):
+    return {
+        "list": mocker.MagicMock(),
+        "content": mocker.MagicMock(),
+        "case": mocker.MagicMock(),
+        "db": mocker.MagicMock()
+    }
 
+class TestLegalDataCollector:
+    def test_collect_all_orchestration(self, mocker, mock_clients):
+        """법령 및 판례 수집 흐름이 올바르게 호출되는지 확인"""
+        # Mock 도메인 데이터
+        mocker.patch("collector.scheduler.REAL_ESTATE_LAWS", ["주택법"])
+        mocker.patch("collector.scheduler.CASE_KEYWORDS", ["전세사기"])
+        
+        # Mock Law API responses
+        mock_clients["list"].search_laws.return_value = {
+            "LawSearch": {"law": [{"법령일련번호": "123"}]}
+        }
+        law_art = LawArticle(
+            article_id="L123_1",
+            law_name="주택법",
+            article_number="제1조",
+            content="목적",
+            sha256="a"*64,
+            url="http://test.com",
+            updated_at=datetime.now()
+        )
+        mock_clients["content"].parse_law_json.return_value = [law_art]
+        
+        # Mock Case API responses
+        case_art = CaseArticle(
+            case_id="C456",
+            case_number="2024다456",
+            case_name="사건",
+            court="법원",
+            decision_date=datetime.now(),
+            decision_type="판결",
+            ruling_summary="요약",
+            ruling_text="본문",
+            url="http://test.com",
+            sha256="b"*64
+        )
+        mock_clients["case"].fetch_all_by_keyword.return_value = [case_art]
+        
+        # DB mock
+        mock_clients["db"].upsert.return_value = True # 둘 다 변경됨으로 가정
+        
+        collector = LegalDataCollector(
+            mock_clients["list"],
+            mock_clients["content"],
+            mock_clients["case"],
+            mock_clients["db"]
+        )
+        
+        changed_ids = collector.collect_all()
+        
+        assert "L123_1" in changed_ids
+        assert "CASE_C456" in changed_ids
+        assert mock_clients["db"].upsert.call_count == 2
 
 class TestLawScheduler:
-    def test_scheduler_registers_job(self, mocker, mock_api, mock_db):
-        """start() 호출 시 BackgroundScheduler.add_job / start 호출 확인"""
-        from collector.scheduler import LawScheduler
-        mock_sched = mocker.patch("collector.scheduler.BackgroundScheduler")
-        scheduler = LawScheduler(api=mock_api, db=mock_db, interval_hours=24)
+    def test_scheduler_starts(self, mocker, mock_clients):
+        """스케줄러 시작 시 add_job 호출 확인"""
+        mock_sched_class = mocker.patch("collector.scheduler.BackgroundScheduler")
+        collector = LegalDataCollector(
+            mock_clients["list"], mock_clients["content"], mock_clients["case"], mock_clients["db"]
+        )
+        scheduler = LawScheduler(collector=collector)
         scheduler.start()
-        mock_sched.return_value.add_job.assert_called_once()
-        mock_sched.return_value.start.assert_called_once()
-
-    def test_collect_and_check_calls_upsert(self, mocker, mock_api, mock_db):
-        """_collect_and_check() → db.upsert(article_id, sha256, updated_at) 호출 확인"""
-        from collector.scheduler import LawScheduler
-        from core.models import LawArticle
-
-        article = LawArticle(
-            article_id="PA_3",
-            law_name="개인정보 보호법",
-            article_number="제3조",
-            content="처리 목적을 명확하게",
-            sha256="a" * 64,
-            url="https://www.law.go.kr/",
-            updated_at=datetime(2024, 1, 1),
-        )
-        mock_api.fetch_all.return_value = [article]
-
-        mocker.patch("collector.scheduler.BackgroundScheduler")
-        scheduler = LawScheduler(api=mock_api, db=mock_db, interval_hours=24)
-        scheduler._collect_and_check()
-
-        mock_db.upsert.assert_called_once_with("PA_3", "a" * 64, datetime(2024, 1, 1))
-
-    def test_collect_returns_changed_ids(self, mocker, mock_api, mock_db):
-        """upsert가 True를 반환한 조항의 article_id가 결과 리스트에 포함됨"""
-        from collector.scheduler import LawScheduler
-        from core.models import LawArticle
-
-        article = LawArticle(
-            article_id="PA_17",
-            law_name="개인정보 보호법",
-            article_number="제17조",
-            content="제3자 제공",
-            sha256="b" * 64,
-            url="https://www.law.go.kr/",
-            updated_at=datetime(2024, 1, 1),
-        )
-        mock_api.fetch_all.return_value = [article]
-        mock_db.upsert.return_value = True  # 변경됨
-
-        mocker.patch("collector.scheduler.BackgroundScheduler")
-        scheduler = LawScheduler(api=mock_api, db=mock_db, interval_hours=24)
-        changed = scheduler._collect_and_check()
-
-        assert "PA_17" in changed
+        
+        mock_sched_class.return_value.add_job.assert_called_once()
+        mock_sched_class.return_value.start.assert_called_once()

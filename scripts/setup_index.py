@@ -1,72 +1,119 @@
-"""scripts/setup_index.py — 법령 수집 → SHA 비교 → 벡터 색인 전체 파이프라인"""
+"""scripts/setup_index.py — 법령 및 판례 수집 → 벡터 색인 전체 파이프라인"""
+import os
 import sys
+import argparse
 from pathlib import Path
 
+# Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from core.models import LawArticle
+from qdrant_client import QdrantClient
+from core.config import Settings
+from core.logger import logger
+from collector.law_list_api import LawListAPIClient
+from collector.law_content_api import LawContentAPIClient
+from collector.case_api import CaseAPIClient
+from collector.domain import REAL_ESTATE_LAWS, CASE_KEYWORDS
+from integrity.db import ArticleDB
+from embedder.indexer import ArticleIndexer
 
 
-def run_setup_index(api_client, db, indexer) -> set[str]:
-    """법령 수집 → SHA 비교 → 변경 조항만 벡터 색인.
+def run_indexing(args):
+    settings = Settings()
+    db = ArticleDB()
+    qdrant = QdrantClient(url=str(settings.qdrant_url))
+    
+    api_key = settings.law_api_key
+    list_api = LawListAPIClient(api_key=api_key)
+    content_api = LawContentAPIClient(api_key=api_key)
+    case_api = CaseAPIClient(api_key=api_key)
+    
+    indexer = ArticleIndexer(qdrant_client=qdrant)
 
-    반환: 변경이 감지된 article_id 집합.
-    """
-    articles: list[LawArticle] = api_client.fetch_all()
-    changed_ids: set[str] = set()
+    if args.reset:
+        logger.info("컬렉션 초기화 시작...")
+        if not args.cases_only:
+            indexer.recreate_collection("laws")
+        if not args.laws_only:
+            indexer.recreate_collection("cases")
 
-    for article in articles:
-        changed = db.upsert(
-            article_id=article.article_id,
-            sha256=article.sha256,
-            updated_at=article.updated_at,
-        )
-        if changed:
-            changed_ids.add(article.article_id)
+    # 1. 법령 수집 및 색인
+    if not args.cases_only:
+        logger.info("=== 법령 수집 및 색인 시작 ===")
+        all_articles = []
+        changed_law_ids = set()
+        
+        for law_name in REAL_ESTATE_LAWS:
+            try:
+                search_data = list_api.search_laws(query=law_name, nw=3)
+                laws = search_data.get("LawSearch", {}).get("law", [])
+                if isinstance(laws, dict): laws = [laws]
+                
+                for law in laws:
+                    mst = law.get("법령일련번호")
+                    if not mst: continue
+                    
+                    content_data = content_api.fetch_law_content(mst=mst)
+                    articles = content_api.parse_law_json(content_data)
+                    all_articles.extend(articles)
+                    
+                    for art in articles:
+                        # reset 모드면 무조건 변경된 것으로 간주하여 색인 대상에 포함
+                        changed = db.upsert(
+                            art.article_id, art.sha256, art.updated_at,
+                            law_name=art.law_name,
+                            article_number=art.article_number,
+                            content=art.content
+                        )
+                        if changed or args.reset:
+                            changed_law_ids.add(art.article_id)
+            except Exception as e:
+                logger.error(f"법령 수집 실패 ({law_name}): {e}")
+        
+        if changed_law_ids:
+            logger.info(f"변경된 법령 조문 {len(changed_law_ids)}개 색인 중...")
+            indexer.upsert_laws(all_articles, changed_ids=changed_law_ids if not args.reset else None)
+        else:
+            logger.info("변경된 법령 조문이 없습니다.")
 
-    if changed_ids:
-        indexer.upsert(articles, changed_ids=changed_ids)
+    # 2. 판례 수집 및 색인
+    if not args.laws_only:
+        logger.info("=== 판례 수집 및 색인 시작 ===")
+        all_cases = []
+        changed_case_ids = set()
+        
+        for keyword in CASE_KEYWORDS:
+            try:
+                cases = case_api.fetch_all_by_keyword(query=keyword, max_count=50)
+                all_cases.extend(cases)
+                
+                for case in cases:
+                    db_id = f"CASE_{case.case_id}"
+                    changed = db.upsert(
+                        db_id, case.sha256, case.decision_date,
+                        law_name=case.case_name,
+                        article_number=case.case_number,
+                        content=case.ruling_text
+                    )
+                    if changed or args.reset:
+                        changed_case_ids.add(db_id)
+            except Exception as e:
+                logger.error(f"판례 수집 실패 ({keyword}): {e}")
+                
+        if changed_case_ids:
+            logger.info(f"변경된 판례 {len(changed_case_ids)}개 색인 중...")
+            indexer.upsert_cases(all_cases, changed_ids=changed_case_ids if not args.reset else None)
+        else:
+            logger.info("변경된 판례가 없습니다.")
 
-    return changed_ids
+    logger.info("=== 모든 색인 작업 완료 ===")
 
 
 if __name__ == "__main__":
-    import os
-    from collector.law_api import LawAPIClient
-    from integrity.db import ArticleDB
-    from embedder.indexer import ArticleIndexer
-    from core.logger import logger
-    from core.config import Settings
-    from qdrant_client import QdrantClient
-
-    settings = Settings()
+    parser = argparse.ArgumentParser(description="법령 및 판례 색인 스크립트")
+    parser.add_argument("--reset", action="store_true", help="기존 컬렉션 삭제 후 전체 재색인")
+    parser.add_argument("--laws-only", action="store_true", help="법령만 색인")
+    parser.add_argument("--cases-only", action="store_true", help="판례만 색인")
     
-    logger.info("--- Vector DB 초기화 및 전체 재색인 시작 ---")
-    
-    api = LawAPIClient(api_key=os.environ["LAW_API_KEY"])
-    db = ArticleDB()
-    qdrant = QdrantClient(url=str(settings.qdrant_url))
-    idx = ArticleIndexer(qdrant_client=qdrant, collection=settings.qdrant_collection)
-
-    # 1. Vector DB 컬렉션 초기화
-    idx.recreate_collection()
-
-    # 2. 모든 법령 데이터 가져오기
-    articles: list[LawArticle] = api.fetch_all()
-    all_article_ids: set[str] = {a.article_id for a in articles}
-    logger.info(f"API에서 총 {len(articles)}개의 법령 조항을 가져왔습니다.")
-
-    # 3. 모든 법령을 대상으로 upsert 수행 (강제 재색인)
-    logger.info(f"총 {len(all_article_ids)}개의 조항을 재색인합니다.")
-    idx.upsert(articles, changed_ids=all_article_ids)
-    
-    # 4. 로컬 DB에도 정보 업데이트 (SHA 기록)
-    for article in articles:
-        db.upsert(
-            article_id=article.article_id,
-            sha256=article.sha256,
-            updated_at=article.updated_at,
-        )
-    logger.info("로컬 DB (SQLite)에 모든 조항의 SHA 및 업데이트 정보를 기록했습니다.")
-
-    logger.info("--- 재색인 완료 ---")
+    args = parser.parse_args()
+    run_indexing(args)

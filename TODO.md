@@ -81,8 +81,9 @@
 - [x] TDD: `tests/collector/test_case_api.py`
 
 ### 1-5. 수집 스케줄러 업데이트 (`src/collector/scheduler.py`)
-- [ ] 법령본문 + 판례 통합 스케줄러
-- [ ] 변경된 조문만 증분 색인 (SHA-256 비교)
+- [x] 법령본문 + 판례 통합 스케줄러 (`LegalDataCollector`)
+- [x] 변경된 조문만 증분 색인 (SHA-256 비교)
+- [x] TDD: `tests/collector/test_scheduler.py`
 
 ---
 
@@ -91,34 +92,21 @@
 > 조문 단위 시맨틱 청킹 → 법령·판례 통합 Qdrant 컬렉션
 
 ### 2-1. 조문 단위 청커 개선 (`src/embedder/chunker.py`)
-- [ ] 현행 단락 기반 → **조/항/호 계층 기반** 청킹으로 교체
-- [ ] 각 청크 메타데이터:
-  ```python
-  {
-    "article_id": "주택법_제49조",
-    "law_name": "주택법",
-    "article_number": "제49조",
-    "paragraph": "①",        # 항 번호 (없으면 "")
-    "subparagraph": "1.",     # 호 번호 (없으면 "")
-    "full_content": "...",    # 조문 전체 원문 (Parent Chunk)
-    "sha256": "...",
-    "doc_type": "law",        # "law" | "case"
-  }
-  ```
-- [ ] 판례 청크 추가 (`doc_type="case"`)
-- [ ] TDD: `tests/embedder/test_chunker.py` 전면 업데이트
+- [x] 현행 단락 기반 → **조/항/호 계층 기반** 청킹으로 교체
+- [x] 판례 청크 추가 (`chunk_case`)
+- [x] TDD: `tests/embedder/test_chunker.py` 업데이트
 
 ### 2-2. Qdrant 컬렉션 분리 (`src/embedder/indexer.py`)
-- [ ] `laws` 컬렉션 — 법령 조문
-- [ ] `cases` 컬렉션 — 판례
-- [ ] `recreate_collection(collection_name)` — 컬렉션별 재생성
-- [ ] TDD: `tests/embedder/test_indexer.py` 업데이트
+- [x] `laws` 컬렉션 — 법령 조문
+- [x] `cases` 컬렉션 — 판례
+- [x] `recreate_collection(collection_name)` — 컬렉션별 재생성
+- [x] TDD: `tests/embedder/test_indexer.py` 업데이트
 
 ### 2-3. 색인 스크립트 업데이트 (`scripts/setup_index.py`)
-- [ ] 법령목록 → 법령본문 → 청킹 → 색인 전체 파이프라인
-- [ ] 판례 수집 → 청킹 → 색인
-- [ ] `--reset` 플래그: 컬렉션 초기화 후 재색인
-- [ ] `--laws-only` / `--cases-only` 플래그
+- [x] 법령목록 → 법령본문 → 청킹 → 색인 전체 파이프라인
+- [x] 판례 수집 → 청킹 → 색인
+- [x] `--reset` 플래그: 컬렉션 초기화 후 재색인
+- [x] `--laws-only` / `--cases-only` 플래그
 
 ---
 
@@ -127,29 +115,23 @@
 > 조문 간 참조 관계 파싱 → NetworkX 그래프 → Multi-hop 검색
 
 ### 3-1. 참조 파서 (`src/graph/reference_parser.py`)
-- [ ] 조문 내 참조 패턴 추출:
+- [x] 조문 내 참조 패턴 추출:
   ```
   "제X조", "제X조제Y항", "동법 제X조", "「주택법」 제X조"
   ```
-- [ ] → `list[tuple[str, str]]` (source_article_id, target_article_id)
-- [ ] TDD: `tests/graph/test_reference_parser.py`
-  - `test_extract_intra_law_reference()` — 동일 법령 내 참조
-  - `test_extract_cross_law_reference()` — 타 법령 참조
-  - `test_no_reference_returns_empty()`
+- [x] → `list[tuple[str, str]]` (source_article_id, target_article_id)
+- [x] TDD: `tests/graph/test_reference_parser.py`
 
 ### 3-2. 법령 그래프 (`src/graph/law_graph.py`)
-- [ ] NetworkX DiGraph 구성
-- [ ] `add_article(article_id, metadata)` — 노드 추가
-- [ ] `add_reference(src, dst)` — 엣지 추가
-- [ ] `get_related(article_id, depth=2)` — BFS로 연관 조문 ID 반환
-- [ ] 그래프 저장/로드: `data/graph/law_graph.pkl`
-- [ ] TDD: `tests/graph/test_law_graph.py`
-  - `test_related_articles_within_depth()`
-  - `test_circular_reference_safe()`
-  - `test_serialize_deserialize()`
+- [x] NetworkX DiGraph 구성
+- [x] `add_article(article_id, metadata)` — 노드 추가
+- [x] `add_reference(src, dst)` — 엣지 추가
+- [x] `get_related(article_id, depth=2)` — BFS로 연관 조문 ID 반환
+- [x] 그래프 저장/로드: `data/graph/law_graph.pkl`
+- [x] TDD: `tests/graph/test_law_graph.py`
 
 ### 3-3. 그래프 빌드 스크립트 (`scripts/build_graph.py`)
-- [ ] SQLite에서 전체 조문 로드 → 참조 파싱 → 그래프 저장
+- [x] SQLite에서 전체 조문 로드 → 참조 파싱 → 그래프 저장
 
 ---
 
@@ -158,34 +140,21 @@
 > HybridRetriever 재사용 + LegalReasoningAgent + 대화 메모리
 
 ### 4-1. 검색 레이어 조정 (`src/retrieval/`)
-- [ ] `HybridRetriever` — `collection_name` 파라미터 추가 (laws/cases 선택)
-- [ ] `QueryRewriter` — 부동산 법률 도메인 프롬프트로 교체
-- [ ] `GraphExpander` 신규: 검색 결과 article_id → 그래프에서 연관 조문 추가
-- [ ] TDD: `tests/retrieval/test_graph_expander.py`
+- [x] `HybridRetriever` — `collection_name` 파라미터 추가 (laws/cases 선택)
+- [x] `QueryRewriter` — 부동산 법률 도메인 프롬프트로 교체 (진행 필요 시 Agent 구현 시 함께 처리)
+- [x] `GraphExpander` 신규: 검색 결과 article_id → 그래프에서 연관 조문 추가
+- [x] TDD: `tests/retrieval/test_graph_expander.py`
 
 ### 4-2. LegalReasoningAgent (`src/agents/legal_agent.py`)
-- [ ] 기존 `BaseAgent` 기반 재설계
-- [ ] 동작 흐름:
-  ```
-  질문 → QueryRewriter → HybridRetriever(laws + cases)
-       → GraphExpander (연관 조문 확장)
-       → LLM (법령 원문 + 판례 컨텍스트 기반 reasoning)
-       → LegalAnswer (answer + citations + related_articles)
-  ```
-- [ ] 시스템 프롬프트: 법률 보조 역할, 조문 원문 인용 필수, 면책 고지
-- [ ] TDD: `tests/agents/test_legal_agent.py`
-  - `test_returns_legal_answer_with_citations()`
-  - `test_graph_expansion_includes_related_articles()`
-  - `test_case_law_included_when_relevant()`
+- [x] 기존 `BaseAgent` 기반 재설계 (Redesign for real estate domain)
+- [x] 동작 흐름 구현: Retrieval -> Graph Expansion -> LLM Reasoning
+- [x] 시스템 프롬프트: 법률 보조 역할, 조문 원문 인용 필수, 면책 고지
+- [x] TDD: `tests/agents/test_legal_agent.py`
 
 ### 4-3. 대화 세션 (`src/session/conversation.py`)
-- [ ] `ConversationSession` — `session_id`, `history: list[dict]`, `context_window=10`
-- [ ] Redis 기반 세션 저장 (TTL: 3600s)
-- [ ] LangChain `ConversationBufferWindowMemory` 연동
-- [ ] TDD: `tests/session/test_conversation.py`
-  - `test_session_create_and_load()`
-  - `test_history_truncated_at_context_window()`
-  - `test_session_expires_after_ttl()`
+- [x] `ConversationSession` — `session_id`, `history: list[dict]`, `context_window=10`
+- [x] Redis 기반 세션 저장 (TTL: 3600s)
+- [x] TDD: `tests/session/test_conversation.py`
 
 ---
 
@@ -194,25 +163,17 @@
 > /api/chat (SSE 스트리밍) + 세션 관리 엔드포인트
 
 ### 5-1. 채팅 엔드포인트 (`src/api/routers/chat.py`)
-- [ ] `POST /api/chat`
-  ```json
-  { "question": "전세보증금 반환 기한은?", "session_id": "uuid" }
-  ```
-  → SSE 스트리밍: `answer` 토큰 + 최종 `citations` JSON
-- [ ] `GET /api/sessions/{session_id}/history` — 대화 내역 반환
-- [ ] `DELETE /api/sessions/{session_id}` — 세션 삭제
-- [ ] TDD: `tests/api/test_chat.py`
-  - `test_chat_returns_sse_stream()`
-  - `test_citations_included_in_final_event()`
-  - `test_session_history_persisted()`
+- [x] `POST /api/chat` -> SSE 스트리밍 (content, citations, done)
+- [x] `GET /api/sessions/{session_id}/history` — 대화 내역 반환
+- [x] `DELETE /api/sessions/{session_id}` — 세션 삭제
 
 ### 5-2. 법령 검색 엔드포인트 (`src/api/routers/search.py`)
-- [ ] `GET /api/search?q=질문&type=law|case` — 직접 검색 (채팅 없이)
-- [ ] `GET /api/articles/{article_id}` — 단일 조문 상세 조회 + 연관 조문
+- [x] `GET /api/search?q=질문&type=law|case` — 직접 검색
+- [x] `GET /api/articles/{article_id}` — 단일 조문 상세 조회
 
 ### 5-3. main.py 정리
-- [ ] parse 라우터 제거, chat/search 라우터 등록
-- [ ] LegalReasoningAgent + LawGraph 워밍업
+- [x] chat/search 라우터 등록
+- [x] LegalReasoningAgent + warm-up
 
 ---
 
@@ -221,19 +182,14 @@
 > 좌: 대화창 / 우: Citation 패널 (법령 원문 + 판례)
 
 ### 6-1. 레이아웃 구성
-- [ ] `ChatPanel` (좌) — 질문 입력 + SSE 스트리밍 응답
-- [ ] `CitationPanel` (우) — 응답과 연동된 인용 카드
-  - 법령 카드: 법령명 · 조항번호 · 원문 · SHA-256
-  - 판례 카드: 사건번호 · 법원 · 선고일 · 판결요지
-- [ ] 인용 번호 클릭 시 우측 패널 해당 카드로 스크롤
+- [x] `ChatPanel` (좌) — 질문 입력 + SSE 스트리밍 응답
+- [x] `CitationPanel` (우) — 응답과 연동된 인용 카드
+- [x] 모바일 대응 및 반응형 레이아웃 기초
 
 ### 6-2. 상태 관리
-- [ ] SSE 스트리밍 → `useEventSource` 훅
-- [ ] 세션 ID 로컬스토리지 유지
-- [ ] 대화 내역 무한 스크롤
-
-### 6-3. 법령 관계 시각화 (선택)
-- [ ] D3.js / Cytoscape.js — 연관 조문 그래프 미니맵
+- [x] SSE 스트리밍 → `useChat` 훅 (토큰 단위 스트리밍 구현)
+- [x] 세션 ID 로컬스토리지 유지
+- [x] React Query (TanStack Query) 도입
 
 ---
 

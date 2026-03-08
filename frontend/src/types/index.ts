@@ -1,5 +1,3 @@
-export type ComplianceStatus = 'compliant' | 'violation' | 'unverifiable';
-
 export interface Citation {
   article_id: string;
   law_name: string;
@@ -8,23 +6,28 @@ export interface Citation {
   url: string;
   updated_at: string;
   article_content?: string;
+  // 판례 필드
+  case_number?: string;
+  court?: string;
+  decision_date?: string;
 }
 
-export interface SourceLocation {
-  line_start: number;
-  line_end: number;
-  snippet: string;
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
-export interface ComplianceReport {
-  status: ComplianceStatus;
-  description: string;
+export interface ChatRequest {
+  question: string;
+  session_id?: string;
+}
+
+export interface ChatContentEvent {
+  text: string;
+}
+
+export interface ChatCitationsEvent {
   citations: Citation[];
-  recommendation?: string;
-  source_location?: SourceLocation;
-}
-
-export interface AnalyzeRequest {
-  code_text: string;
-  url?: string;
+  related_articles: string[];
+  session_id: string;
 }
