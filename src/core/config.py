@@ -23,3 +23,7 @@ class Settings(BaseSettings):
     # 앱 설정
     env: str = "dev"
     log_level: str = "INFO"
+
+    # 성능 최적화
+    llm_concurrency: int = 3                  # 동시 LLM 처리 최대 수
+    cache_similarity_threshold: float = 0.92  # 시맨틱 캐시 히트 유사도 임계값

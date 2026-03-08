@@ -11,6 +11,9 @@ from retrieval.graph_expander import GraphExpander
 from graph.law_graph import LawGraph
 from agents.legal_agent import LegalReasoningAgent
 from session.conversation import SessionManager
+from cache.semantic_cache import SemanticCache
+from streaming.llm_queue import LLMJobQueue
+from worker.llm_worker import LLMWorker
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -80,3 +83,28 @@ def get_redis_client():
 def get_session_manager() -> SessionManager:
     settings = get_settings()
     return SessionManager(settings.redis_url)
+
+
+@lru_cache(maxsize=1)
+def get_semantic_cache() -> Optional[SemanticCache]:
+    try:
+        settings = get_settings()
+        return SemanticCache(
+            openai_api_key=settings.openai_api_key,
+            qdrant_client=get_qdrant_client(),
+            threshold=settings.cache_similarity_threshold,
+        )
+    except Exception as e:
+        logger.warning(f"SemanticCache 초기화 실패: {e}")
+        return None
+
+
+@lru_cache(maxsize=1)
+def get_llm_queue() -> LLMJobQueue:
+    settings = get_settings()
+    return LLMJobQueue(settings.redis_url)
+
+
+@lru_cache(maxsize=1)
+def get_llm_worker() -> LLMWorker:
+    return LLMWorker(queue=get_llm_queue(), agent=get_legal_agent())

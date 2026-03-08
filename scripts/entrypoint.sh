@@ -23,5 +23,7 @@ else
   python scripts/build_graph.py
 fi
 
-# API 서버 시작
-exec uvicorn api.main:app --host 0.0.0.0 --port 8000
+# API 서버 시작 (CPU 코어 수 기반 멀티워커)
+WORKERS=${UVICORN_WORKERS:-$(nproc)}
+echo "Starting API server with ${WORKERS} workers..."
+exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers "${WORKERS}"

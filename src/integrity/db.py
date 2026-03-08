@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS article_history (
 class ArticleDB:
     def __init__(self, db_path: str = "data/sqlite/articles.db") -> None:
         self._conn = sqlite3.connect(db_path)
+        self._conn.execute("PRAGMA journal_mode=WAL")  # 동시 읽기/쓰기 성능 향상
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_DDL)
         self._conn.commit()

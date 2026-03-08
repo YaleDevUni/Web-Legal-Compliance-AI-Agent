@@ -223,4 +223,46 @@
 
 ---
 
-*Last updated: 2026-03-08*
+---
+
+## Phase 7 — 성능 최적화 (스케일링)
+
+> SQLite WAL + 시맨틱 캐시 + Redis Stream LLM 큐잉 + Uvicorn 멀티워커
+
+### 7-1. SQLite WAL 모드 (`src/integrity/db.py`)
+- [x] TDD: `tests/integrity/test_db_wal.py` — WAL 모드 활성화 확인
+- [x] `ArticleDB.__init__`에 `PRAGMA journal_mode=WAL` 추가
+
+### 7-2. 시맨틱 응답 캐시 (`src/cache/semantic_cache.py`)
+- [x] TDD: `tests/cache/test_semantic_cache.py`
+  - 캐시 miss → None 반환
+  - 캐시 set 후 유사 질문 get → 응답 반환 (threshold 이상)
+  - 낮은 유사도 질문 → None 반환
+- [x] `SemanticCache` 클래스: OpenAI 임베딩 + Qdrant `query_cache` 컬렉션
+- [x] `get(question)` / `set(question, response)` 구현
+
+### 7-3. Redis Stream LLM 큐 (`src/streaming/llm_queue.py`)
+- [x] TDD: `tests/streaming/test_llm_queue.py`
+  - `enqueue` → job_id 반환
+  - `dequeue` → job dict 반환
+  - `publish_chunk` → `consume_response` 로 청크 수신
+  - Consumer Group 재생성 시 오류 없음 (BUSYGROUP 무시)
+- [x] `LLMJobQueue`: XADD / XREADGROUP / XACK / XREAD 기반 구현
+
+### 7-4. LLM 워커 (`src/worker/llm_worker.py`)
+- [x] TDD: `tests/worker/test_llm_worker.py`
+  - `_process` — agent mock으로 청크 발행 검증
+  - 오류 발생 시 `error` 청크 발행 + XACK 확인
+- [x] `LLMWorker`: 백그라운드 asyncio 태스크
+- [x] Citation 객체 → dict 직렬화 처리
+
+### 7-5. 통합 연결
+- [x] `api/dependencies.py` — `get_llm_queue`, `get_semantic_cache`, `get_llm_worker` 추가
+- [x] `api/routers/chat.py` — 캐시 확인 → 큐 enqueue → 응답 스트리밍
+- [x] `api/main.py` — lifespan에서 worker 백그라운드 태스크 시작
+- [x] `src/core/config.py` — `llm_concurrency`, `cache_similarity_threshold` 설정 추가
+- [x] `scripts/entrypoint.sh` — `uvicorn --workers $(nproc)` 적용
+
+---
+
+*Last updated: 2026-03-09*

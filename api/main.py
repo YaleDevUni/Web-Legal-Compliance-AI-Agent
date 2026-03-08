@@ -1,4 +1,5 @@
 """api/main.py — 부동산 법률 상담 AI API 진입점"""
+import asyncio
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -14,19 +15,39 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import chat, search
-from api.dependencies import get_law_retriever, get_case_retriever, get_redis_client
+from api.dependencies import (
+    get_law_retriever,
+    get_case_retriever,
+    get_redis_client,
+    get_llm_worker,
+)
 from core.logger import logger
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 시작 시 싱글턴 초기화 (warm-up)
+    # 시작: 싱글턴 warm-up
     logger.info("서비스 초기화 및 검색기 워밍업...")
     get_law_retriever()
     get_case_retriever()
     get_redis_client()
+
+    # LLM Worker 백그라운드 태스크 시작
+    worker = get_llm_worker()
+    worker_task = asyncio.create_task(worker.start())
     logger.info("서비스 준비 완료")
+
     yield
+
+    # 종료: worker 중단
+    worker.stop()
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
     logger.info("서비스 종료")
+
 
 app = FastAPI(
     title="부동산 법률 AI 상담사",
@@ -37,7 +58,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 개발 환경 편의를 위해 전체 허용 (추후 제한 권장)
+    allow_origins=["*"],  # 개발 환경 편의를 위해 전체 허용 (추후 제한 권장)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,6 +66,7 @@ app.add_middleware(
 
 app.include_router(chat.router)
 app.include_router(search.router)
+
 
 @app.get("/health")
 def health():
