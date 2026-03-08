@@ -243,7 +243,28 @@
 
 ---
 
-## 8. 스트리밍 레이어 (`src/streaming/`)
+## 8. URL 분석 캐시 (`src/cache/`)
+
+### 8-1. url_cache.py
+- [x] **[Red]** `tests/cache/test_url_cache.py` 작성 (Redis mock, 11개 테스트)
+  - [x] 캐시 미스 → None 반환 테스트
+  - [x] URL이 Redis 키로 사용되는지 확인 테스트
+  - [x] 캐시 히트 → ComplianceReport 리스트 반환 테스트
+  - [x] 히트 시 status/citations 보존 테스트
+  - [x] 빈 리스트도 유효한 캐시 값으로 처리 테스트
+  - [x] 기본 TTL=3600초 저장 테스트
+  - [x] 커스텀 TTL 적용 테스트
+  - [x] JSON 직렬화 저장 테스트
+  - [x] URL을 키로 사용하는지 확인 테스트
+  - [x] 빈 리스트 저장 테스트
+- [x] **[Green]** `src/cache/url_cache.py` 구현
+  - [x] `get(url)`: exact-match 키 조회, Pydantic 역직렬화
+  - [x] `set(url, reports, ttl)`: model_dump(mode='json') 직렬화 후 Redis 저장
+- [x] **[Refactor]** app.py 통합 — URL 탭 분석 시 캐시 조회/저장, Redis 실패 시 폴백
+
+---
+
+## 9. 스트리밍 레이어 (`src/streaming/`)
 
 - [x] **[Red]** `tests/streaming/test_redis_stream.py` 작성 (Redis mock)
   - [x] XADD 호출 및 메시지 포맷 테스트
@@ -330,6 +351,7 @@
 | agents/service | **완료** | **완료** | **완료** |
 | agents/orchestrator | **완료** | **완료** | **완료** |
 | streaming/redis_stream | **완료** | **완료** | **완료** |
+| cache/url_cache | **완료** | **완료** | **완료** |
 | scripts/setup_index | **완료** | **완료** | **완료** |
 | 통합 테스트 | 미완료 | - | - |
 | Streamlit UI | - | **완료** | - |
