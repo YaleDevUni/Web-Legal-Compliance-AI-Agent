@@ -52,10 +52,14 @@ export function useChat() {
     enabled: !!sessionId,
   });
 
-  // 세션 citations — React Query 캐시에 누적 저장 (article_id 기준 중복 제거)
+  // 세션 citations — React Query 캐시 + localStorage 이중 저장 (새로고침 복원용)
   const { data: citations = [] } = useQuery<Citation[]>({
     queryKey: ['citations', sessionId],
-    queryFn: () => [],
+    queryFn: () => {
+      if (!sessionId) return [];
+      const stored = localStorage.getItem(`citations:${sessionId}`);
+      return stored ? (JSON.parse(stored) as Citation[]) : [];
+    },
     staleTime: Infinity,
     gcTime: Infinity,
   });
@@ -74,6 +78,7 @@ export function useChat() {
   // 세션 초기화
   const resetSession = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(`citations:${sessionId}`);
     queryClient.removeQueries({ queryKey: ['chatHistory', sessionId] });
     queryClient.removeQueries({ queryKey: ['citations', sessionId] });
     setSessionId('');
@@ -120,11 +125,14 @@ export function useChat() {
           } else if (event === 'citations') {
             const ev = payload as ChatCitationsEvent;
             const sid = ev.session_id || resolvedSessionId;
-            // React Query 캐시에 누적 append (article_id 기준 중복 제거)
+            // React Query 캐시 + localStorage에 누적 append (article_id 기준 중복 제거)
             queryClient.setQueryData<Citation[]>(['citations', sid], (prev = []) => {
               const existingIds = new Set(prev.map((c) => c.article_id));
               const newOnes = ev.citations.filter((c) => !existingIds.has(c.article_id));
-              return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+              if (newOnes.length === 0) return prev;
+              const updated = [...prev, ...newOnes];
+              localStorage.setItem(`citations:${sid}`, JSON.stringify(updated));
+              return updated;
             });
             if (!sessionId) {
               resolvedSessionId = ev.session_id;
