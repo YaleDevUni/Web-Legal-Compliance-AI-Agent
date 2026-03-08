@@ -1,358 +1,289 @@
-# Web Legal Compliance AI Agent — TDD 구현 TODO
+# 부동산 법령 AI — 개발 로드맵 (TDD 기반)
 
-> **TDD 사이클**: Red (실패 테스트 작성) → Green (최소 구현) → Refactor
-> 체크박스: `- [x]` 완료 / `- [ ]` 미완료
-> 각 모듈은 **테스트 파일 먼저** 작성 후 구현합니다.
-> **테스트 주석 기준**: 모듈 docstring에 테스트 전략 설명, 각 테스트 함수에 1줄 docstring 필수
+> 도메인: **부동산법** (주택법·공인중개사법·건축법 등)
+> 핵심: 법령 Open API 수집 → 조문 단위 청킹 → RAG Reasoning Agent → 대화형 UI (좌: 채팅 / 우: 인용 패널)
 
 ---
 
-## 0. 프로젝트 초기 설정
+## 방향 전환 요약
 
-- [x] 폴더 구조 생성 (`src/`, `scripts/`, `data/`, `tests/`)
-- [x] `pyproject.toml` 작성 (의존성 + pytest, pytest-asyncio, pytest-mock 포함)
-- [x] `uv sync` 실행 및 `uv.lock` 생성
-- [x] `.env.example` 작성 (`OPENAI_API_KEY`, `QDRANT_URL`, `REDIS_URL`, `LAW_API_KEY`)
-- [x] `.gitignore` 작성
-- [x] `tests/conftest.py` 작성 (공통 픽스처: mock LLM, mock Qdrant, mock Redis)
-- [x] 전체 테스트 파일 주석 보강 (모듈 docstring 테스트 전략 + 각 테스트 함수 1줄 docstring)
-
----
-
-## 1. 핵심 공통 모듈 (`src/core/`)
-
-### 1-1. models.py
-- [x] **[Red]** `tests/core/test_models.py` 작성
-  - [x] `LawArticle` 필드 검증 테스트 (article_id, law_name, content, sha256, url, updated_at)
-  - [x] `Citation` 포맷 검증 테스트
-  - [x] `ComplianceReport` 준수/위반 분류 테스트
-- [x] **[Green]** `src/core/models.py` 구현 (Pydantic BaseModel)
-- [x] **[Refactor]** 유효성 검사 validator 추가
-
-### 1-2. config.py
-- [x] **[Red]** `tests/core/test_config.py` 작성
-  - [x] 환경변수 누락 시 예외 발생 테스트
-  - [x] 기본값 설정 테스트
-- [x] **[Green]** `src/core/config.py` 구현 (pydantic BaseSettings)
-- [x] **[Refactor]** 환경별 설정 분리 (dev / prod)
-
-### 1-3. logger.py
-- [x] **[Green]** `src/core/logger.py` 구현 (loguru, 테스트 불필요)
+| 제거 | 유지 | 신규 |
+|------|------|------|
+| URL/파일 입력 & 웹 분석 | core models · config · logger | 부동산 법령 도메인 정의 |
+| PrivacyAgent · SecurityAgent · ServiceAgent | embedder (chunker · indexer) | 판례 API 수집 파이프라인 |
+| Orchestrator (웹 분석용) | retrieval (BM25 · vector · hybrid · RRF) | 법령 관계 그래프 (NetworkX) |
+| parse-url / parse-file 엔드포인트 | Redis Stream · Qdrant · SQLite | LegalReasoningAgent |
+| URL 캐시 | FastAPI 기본 구조 | 대화 세션 (conversation memory) |
+| 웹 보안 테스트 전체 | integrity (SHA-256) | /api/chat 엔드포인트 + SSE |
 
 ---
 
-## 2. SHA-256 무결성 관리 (`src/integrity/`)
+## Phase 0 — 프로젝트 정리 (Cleanup)
 
-### 2-1. hasher.py
-- [x] **[Red]** `tests/integrity/test_hasher.py` 작성
-  - [x] 동일 텍스트 → 동일 해시 테스트
-  - [x] 다른 텍스트 → 다른 해시 테스트
-  - [x] 빈 문자열 해시 테스트
-- [x] **[Green]** `src/integrity/hasher.py` 구현 (hashlib.sha256)
-- [x] **[Refactor]** 인코딩 처리 통일
+> 웹 분석 기능 제거, 도메인 모델 재정의
 
-### 2-2. db.py
-- [x] **[Red]** `tests/integrity/test_db.py` 작성 (SQLite in-memory)
-  - [x] 테이블 생성 테스트
-  - [x] 신규 조항 INSERT 테스트
-  - [x] 해시 변경 감지 테스트 (hash_curr ≠ hash_prev → True 반환)
-  - [x] 해시 동일 시 스킵 테스트 (→ False 반환)
-  - [x] 이력 조회 테스트
-- [x] **[Green]** `src/integrity/db.py` 구현 (SQLite CRUD)
-- [x] **[Refactor]** 트랜잭션 처리 및 예외 핸들링
+### 0-1. 도메인 모델 재정의 (`src/core/models.py`)
+- [ ] `LawArticle` — 유지 (필드 정리)
+- [ ] `Citation` — 유지 (판례 출처 필드 추가: `case_number`, `court`, `decision_date`)
+- [ ] `ComplianceReport` → **`LegalAnswer`** 로 교체
+  - `question: str`
+  - `answer: str`  (reasoning 텍스트)
+  - `citations: list[Citation]`
+  - `related_articles: list[str]`  (그래프 확장 조문 ID)
+  - `session_id: str`
+- [ ] `CaseArticle` (판례 전용 모델) 신규 추가
+- [ ] TDD: `tests/core/test_models.py` 업데이트
 
----
+### 0-2. 제거 대상 파일 목록 정리 후 삭제
+```
+src/input/url_parser.py
+src/input/file_loader.py
+src/input/token_splitter.py
+src/agents/privacy_agent.py
+src/agents/security_agent.py
+src/agents/service_agent.py
+src/agents/orchestrator.py
+src/cache/url_cache.py
+src/api/routers/parse.py
+```
 
-## 3. 법령 수집 (`src/collector/`)
-
-### 3-1. parser.py
-- [x] **[Red]** `tests/collector/test_parser.py` 작성
-  - [x] 정상 XML 응답 → `LawArticle` 리스트 변환 테스트
-  - [x] 필드 누락 응답 처리 테스트
-  - [x] 빈 응답 처리 테스트
-- [x] **[Green]** `src/collector/parser.py` 구현
-- [x] **[Refactor]** 파싱 오류 로깅 추가
-
-### 3-2. law_api.py
-- [x] **[Red]** `tests/collector/test_law_api.py` 작성 (requests mock)
-  - [x] API 정상 호출 테스트 (7개 법령 각각)
-  - [x] 네트워크 오류 재시도 테스트
-  - [x] API 키 누락 시 예외 테스트
-- [x] **[Green]** `src/collector/law_api.py` 구현 (law.go.kr Open API)
-  - [x] 개인정보보호법, 정보통신망법, 위치정보법
-  - [x] 안전성 확보 조치 기준
-  - [x] 전자상거래법, 청소년보호법, 신용정보법
-- [x] **[Refactor]** rate limit 처리, 지수 백오프 재시도
-
-### 3-3. scheduler.py
-- [x] **[Red]** `tests/collector/test_scheduler.py` 작성 (APScheduler mock)
-  - [x] 스케줄 등록 테스트
-  - [x] 수집 → SHA 비교 → 재임베딩 흐름 테스트
-- [x] **[Green]** `src/collector/scheduler.py` 구현
-- [x] **[Refactor]** 스케줄 주기 config화
+### 0-3. 테스트 정리
+- [ ] 웹 분석 관련 테스트 삭제
+  - `tests/input/` 전체
+  - `tests/agents/test_orchestrator.py`, `test_privacy_agent.py`, `test_security_agent.py`, `test_service_agent.py`
+  - `tests/cache/test_url_cache.py`
+  - `tests/api/test_analyze_queue.py`
+- [ ] 신규 구조에 맞게 `conftest.py` 재정비
 
 ---
 
-## 4. 임베딩 & 색인 (`src/embedder/`)
+## Phase 1 — 법령 데이터 파이프라인
 
-### 4-1. chunker.py
-- [x] **[Red]** `tests/embedder/test_chunker.py` 작성
-  - [x] chunk_size 이하 텍스트 → 단일 청크 테스트
-  - [x] chunk_size 초과 텍스트 → 복수 청크 + overlap 테스트
-  - [x] 메타데이터 보존 테스트 (article_id, sha 등)
-- [x] **[Green]** `src/embedder/chunker.py` 구현 (RecursiveCharacterTextSplitter)
-- [x] **[Refactor]** 법령 조항 구분자 우선 분할
+> law.go.kr Open API → 법령목록 → 법령본문 → 조문 파싱 → 청킹 → Qdrant
 
-### 4-2. indexer.py
-- [x] **[Red]** `tests/embedder/test_indexer.py` 작성 (Qdrant mock)
-  - [x] 신규 조항 upsert 테스트
-  - [x] 변경된 조항만 재임베딩 테스트
-  - [x] 변경 없는 조항 스킵 테스트
-  - [x] 컬렉션 없으면 자동 생성 테스트
-- [x] **[Green]** `src/embedder/indexer.py` 구현 (qdrant-client)
-- [x] **[Refactor]** 배치 upsert로 성능 최적화
+### 1-1. 부동산 도메인 법령 정의 (`src/collector/domain.py`)
+```python
+REAL_ESTATE_LAWS = [
+    "주택법", "공인중개사법", "부동산 거래신고 등에 관한 법률",
+    "건축법", "집합건물의 소유 및 관리에 관한 법률",
+    "토지이용규제 기본법", "도시 및 주거환경정비법",
+    "민법 (부동산 관련 편)", "부동산등기법",
+    "주택임대차보호법", "상가건물 임대차보호법",
+]
+```
+- [ ] TDD: `tests/collector/test_domain.py` — 법령명 목록 존재 확인
 
----
+### 1-2. 법령목록 API (`src/collector/law_list_api.py`)
+- [x] `GET /DRF/lawSearch.do` — OC, target=law, type=JSON, query=법령명
+- [x] 반환: `[{"법령ID": "...", "법령명": "...", "시행일": "..."}]`
+- [x] 페이지네이션 처리 (display=100, page=1,2,…)
+- [x] TDD: `tests/collector/test_law_list_api.py`
 
-## 5. 입력 처리 (`src/input/`)
+### 1-3. 법령본문 API (`src/collector/law_content_api.py`)
+- [x] `GET /DRF/lawService.do` — OC, target=law, type=JSON, ID=법령ID
+- [x] 반환: 조문 목록 파싱 → `list[LawArticle]`
+- [x] 조문 계층 보존: 조(條) → 항(項) → 호(號) → 목(目)
+- [x] TDD: `tests/collector/test_law_content_api.py`
 
-### 5-1. file_loader.py
-- [x] **[Red]** `tests/input/test_file_loader.py` 작성 (tmp_path 픽스처)
-  - [x] `.py` 파일 로드 테스트
-  - [x] `.html` 파일 로드 테스트
-  - [x] `.js` / `.css` 파일 로드 테스트
-  - [x] 존재하지 않는 경로 예외 테스트
-  - [x] 미지원 확장자 예외 테스트
-- [x] **[Green]** `src/input/file_loader.py` 구현
-- [x] **[Refactor]** 확장자별 인코딩 처리
+### 1-4. 판례 API (`src/collector/case_api.py`)
+- [ ] 법원 판례정보 Open API (`/DRF/lawSearch.do?target=prec`)
+- [ ] 부동산 키워드 목록으로 판례 수집:
+  ```
+  ["전세사기", "임대차", "매매계약", "분양", "재개발",
+   "공인중개사", "하자담보", "명도소송", "유치권", "저당권",
+   "전세권", "임차권등기명령", "계약갱신청구권"]
+  ```
+- [ ] `CaseArticle` 모델로 파싱 (사건번호, 법원명, 선고일, 판시사항, 판결요지, 참조조문)
+- [ ] TDD: `tests/collector/test_case_api.py`
+  - `test_fetch_cases_by_keyword()`
+  - `test_parse_case_to_model()`
+  - `test_reference_articles_extracted()` — 판례 내 참조조문 파싱
 
-### 5-2. url_parser.py
-- [x] **[Red]** `tests/input/test_url_parser.py` 작성 (responses mock)
-  - [x] HTML 파싱 + JS/CSS/meta 태그 추출 테스트
-  - [x] 잘못된 URL 예외 테스트
-  - [x] 타임아웃 처리 테스트
-- [x] **[Green]** `src/input/url_parser.py` 구현 (requests + BeautifulSoup4)
-- [x] **[Refactor]** 상대 경로 → 절대 URL 변환
-
-### 5-3. token_splitter.py
-- [x] **[Red]** `tests/input/test_token_splitter.py` 작성
-  - [x] 한도 이내 텍스트 → 단일 청크 반환 테스트
-  - [x] 한도 초과 텍스트 → 복수 청크 반환 테스트
-  - [x] chunk_size = ctx_limit × 0.7 검증 테스트
-  - [x] overlap = 200 토큰 검증 테스트
-- [x] **[Green]** `src/input/token_splitter.py` 구현 (tiktoken)
-- [x] **[Refactor]** 모델별 ctx_limit 매핑 테이블
+### 1-5. 수집 스케줄러 업데이트 (`src/collector/scheduler.py`)
+- [ ] 법령본문 + 판례 통합 스케줄러
+- [ ] 변경된 조문만 증분 색인 (SHA-256 비교)
 
 ---
 
-## 6. 검색 레이어 (`src/retrieval/`)
+## Phase 2 — 청킹 & 임베딩 파이프라인
 
-### 6-1. cache.py
-- [x] **[Red]** `tests/retrieval/test_cache.py` 작성 (Redis mock)
-  - [x] cosine ≥ 0.95 → 캐시 히트 반환 테스트
-  - [x] cosine < 0.95 → 캐시 미스 테스트
-  - [x] TTL 1시간 설정 검증 테스트
-  - [x] 캐시 저장 테스트
-- [x] **[Green]** `src/retrieval/cache.py` 구현 (redis-py)
-- [x] **[Refactor]** 직렬화 방식 통일 (JSON)
+> 조문 단위 시맨틱 청킹 → 법령·판례 통합 Qdrant 컬렉션
 
-### 6-2. bm25.py
-- [x] **[Red]** `tests/retrieval/test_bm25.py` 작성
-  - [x] 조항 번호 정확 매칭 테스트 (e.g. "제17조")
-  - [x] 법률 용어 매칭 테스트
-  - [x] 빈 코퍼스 예외 테스트
-- [x] **[Green]** `src/retrieval/bm25.py` 구현 (rank-bm25)
-- [x] **[Refactor]** 형태소 분석기 연동 (선택)
+### 2-1. 조문 단위 청커 개선 (`src/embedder/chunker.py`)
+- [ ] 현행 단락 기반 → **조/항/호 계층 기반** 청킹으로 교체
+- [ ] 각 청크 메타데이터:
+  ```python
+  {
+    "article_id": "주택법_제49조",
+    "law_name": "주택법",
+    "article_number": "제49조",
+    "paragraph": "①",        # 항 번호 (없으면 "")
+    "subparagraph": "1.",     # 호 번호 (없으면 "")
+    "full_content": "...",    # 조문 전체 원문 (Parent Chunk)
+    "sha256": "...",
+    "doc_type": "law",        # "law" | "case"
+  }
+  ```
+- [ ] 판례 청크 추가 (`doc_type="case"`)
+- [ ] TDD: `tests/embedder/test_chunker.py` 전면 업데이트
 
-### 6-3. vector.py
-- [x] **[Red]** `tests/retrieval/test_vector.py` 작성 (Qdrant mock)
-  - [x] 쿼리 임베딩 생성 테스트
-  - [x] Qdrant 검색 결과 반환 테스트
-  - [x] payload 필터 적용 테스트
-- [x] **[Green]** `src/retrieval/vector.py` 구현 (text-embedding-3-small + qdrant-client)
-- [x] **[Refactor]** 배치 임베딩 처리
+### 2-2. Qdrant 컬렉션 분리 (`src/embedder/indexer.py`)
+- [ ] `laws` 컬렉션 — 법령 조문
+- [ ] `cases` 컬렉션 — 판례
+- [ ] `recreate_collection(collection_name)` — 컬렉션별 재생성
+- [ ] TDD: `tests/embedder/test_indexer.py` 업데이트
 
-### 6-4. rrf.py
-- [x] **[Red]** `tests/retrieval/test_rrf.py` 작성
-  - [x] BM25 + Vector 결과 융합 점수 계산 테스트
-  - [x] 중복 문서 통합 테스트
-  - [x] 결과 내림차순 정렬 테스트
-- [x] **[Green]** `src/retrieval/rrf.py` 구현 (Reciprocal Rank Fusion)
-- [x] **[Refactor]** k 파라미터 config화
-
-### 6-5. dynamic_topk.py
-- [x] **[Red]** `tests/retrieval/test_dynamic_topk.py` 작성
-  - [x] threshold 이상 스코어 개수 클램핑 테스트
-  - [x] 빈 스코어 → min_k 반환 테스트
-  - [x] max_k 초과 클램핑 테스트
-- [x] **[Green]** `src/retrieval/dynamic_topk.py` 구현
-- [x] **[Refactor]** 복잡도 판별 기준 고도화
-
-### 6-6. query_rewriter.py
-- [x] **[Red]** `tests/retrieval/test_query_rewriter.py` 작성 (LLM mock)
-  - [x] LLM 재작성 쿼리 반환 테스트
-  - [x] Multi-Query 확장 테스트 (N개 쿼리 반환)
-  - [x] 빈 쿼리 ValueError 테스트
-  - [x] 빈 LLM 응답 fallback 테스트
-- [x] **[Green]** `src/retrieval/query_rewriter.py` 구현
-- [x] **[Refactor]** 프롬프트 템플릿 분리
+### 2-3. 색인 스크립트 업데이트 (`scripts/setup_index.py`)
+- [ ] 법령목록 → 법령본문 → 청킹 → 색인 전체 파이프라인
+- [ ] 판례 수집 → 청킹 → 색인
+- [ ] `--reset` 플래그: 컬렉션 초기화 후 재색인
+- [ ] `--laws-only` / `--cases-only` 플래그
 
 ---
 
-## 7. 멀티 에이전트 (`src/agents/`)
+## Phase 3 — 법령 관계 그래프
 
-### 7-1. citation.py
-- [x] **[Red]** `tests/agents/test_citation.py` 작성
-  - [x] 중복 조항 제거 테스트
-  - [x] SHA + URL + 개정일 부착 테스트
-  - [x] 출력 포맷 검증 테스트
-- [x] **[Green]** `src/agents/citation.py` 구현 (Citation Assembler)
-- [x] **[Refactor]** article_id 기준 중복 제거
+> 조문 간 참조 관계 파싱 → NetworkX 그래프 → Multi-hop 검색
 
-### 7-2. privacy_agent.py
-- [x] **[Red]** `tests/agents/test_privacy_agent.py` 작성 (LLM mock)
-  - [x] 동의 코드 존재 시 준수 판정 테스트
-  - [x] 민감정보 처리 코드 감지 테스트
-  - [x] Citation 반환 테스트
-- [x] **[Green]** `src/agents/privacy_agent.py` 구현
-- [x] **[Refactor]** BaseAgent 공통 로직 분리
+### 3-1. 참조 파서 (`src/graph/reference_parser.py`)
+- [ ] 조문 내 참조 패턴 추출:
+  ```
+  "제X조", "제X조제Y항", "동법 제X조", "「주택법」 제X조"
+  ```
+- [ ] → `list[tuple[str, str]]` (source_article_id, target_article_id)
+- [ ] TDD: `tests/graph/test_reference_parser.py`
+  - `test_extract_intra_law_reference()` — 동일 법령 내 참조
+  - `test_extract_cross_law_reference()` — 타 법령 참조
+  - `test_no_reference_returns_empty()`
 
-### 7-3. security_agent.py
-- [x] **[Red]** `tests/agents/test_security_agent.py` 작성 (LLM mock)
-  - [x] 평문 비밀번호 패턴 탐지 테스트
-  - [x] HTTP → HTTPS 리다이렉트 미적용 탐지 테스트
-  - [x] Citation 반환 테스트
-- [x] **[Green]** `src/agents/security_agent.py` 구현
-- [x] **[Refactor]** BaseAgent 공통 로직 분리
+### 3-2. 법령 그래프 (`src/graph/law_graph.py`)
+- [ ] NetworkX DiGraph 구성
+- [ ] `add_article(article_id, metadata)` — 노드 추가
+- [ ] `add_reference(src, dst)` — 엣지 추가
+- [ ] `get_related(article_id, depth=2)` — BFS로 연관 조문 ID 반환
+- [ ] 그래프 저장/로드: `data/graph/law_graph.pkl`
+- [ ] TDD: `tests/graph/test_law_graph.py`
+  - `test_related_articles_within_depth()`
+  - `test_circular_reference_safe()`
+  - `test_serialize_deserialize()`
 
-### 7-4. service_agent.py
-- [x] **[Red]** `tests/agents/test_service_agent.py` 작성 (LLM mock)
-  - [x] 결제 코드 감지 → 전자상거래법 적용 테스트
-  - [x] 사업자 정보 미표시 탐지 테스트
-  - [x] Citation 반환 테스트
-- [x] **[Green]** `src/agents/service_agent.py` 구현
-- [x] **[Refactor]** BaseAgent 공통 로직 분리
-
-### 7-5. orchestrator.py
-- [x] **[Red]** `tests/agents/test_orchestrator.py` 작성 (Sub-Agent mock)
-  - [x] 3개 에이전트 모두 호출 테스트
-  - [x] 병렬 결과 병합 테스트
-  - [x] 빈 입력 → 빈 리스트 반환 테스트
-- [x] **[Green]** `src/agents/orchestrator.py` 구현
-- [x] **[Refactor]** 3 에이전트 순차 호출 병합
+### 3-3. 그래프 빌드 스크립트 (`scripts/build_graph.py`)
+- [ ] SQLite에서 전체 조문 로드 → 참조 파싱 → 그래프 저장
 
 ---
 
-## 8. URL 분석 캐시 (`src/cache/`)
+## Phase 4 — RAG + Reasoning Agent
 
-### 8-1. url_cache.py
-- [x] **[Red]** `tests/cache/test_url_cache.py` 작성 (Redis mock, 11개 테스트)
-  - [x] 캐시 미스 → None 반환 테스트
-  - [x] URL이 Redis 키로 사용되는지 확인 테스트
-  - [x] 캐시 히트 → ComplianceReport 리스트 반환 테스트
-  - [x] 히트 시 status/citations 보존 테스트
-  - [x] 빈 리스트도 유효한 캐시 값으로 처리 테스트
-  - [x] 기본 TTL=3600초 저장 테스트
-  - [x] 커스텀 TTL 적용 테스트
-  - [x] JSON 직렬화 저장 테스트
-  - [x] URL을 키로 사용하는지 확인 테스트
-  - [x] 빈 리스트 저장 테스트
-- [x] **[Green]** `src/cache/url_cache.py` 구현
-  - [x] `get(url)`: exact-match 키 조회, Pydantic 역직렬화
-  - [x] `set(url, reports, ttl)`: model_dump(mode='json') 직렬화 후 Redis 저장
-- [x] **[Refactor]** app.py 통합 — URL 탭 분석 시 캐시 조회/저장, Redis 실패 시 폴백
+> HybridRetriever 재사용 + LegalReasoningAgent + 대화 메모리
 
----
+### 4-1. 검색 레이어 조정 (`src/retrieval/`)
+- [ ] `HybridRetriever` — `collection_name` 파라미터 추가 (laws/cases 선택)
+- [ ] `QueryRewriter` — 부동산 법률 도메인 프롬프트로 교체
+- [ ] `GraphExpander` 신규: 검색 결과 article_id → 그래프에서 연관 조문 추가
+- [ ] TDD: `tests/retrieval/test_graph_expander.py`
 
-## 9. 스트리밍 레이어 (`src/streaming/`)
+### 4-2. LegalReasoningAgent (`src/agents/legal_agent.py`)
+- [ ] 기존 `BaseAgent` 기반 재설계
+- [ ] 동작 흐름:
+  ```
+  질문 → QueryRewriter → HybridRetriever(laws + cases)
+       → GraphExpander (연관 조문 확장)
+       → LLM (법령 원문 + 판례 컨텍스트 기반 reasoning)
+       → LegalAnswer (answer + citations + related_articles)
+  ```
+- [ ] 시스템 프롬프트: 법률 보조 역할, 조문 원문 인용 필수, 면책 고지
+- [ ] TDD: `tests/agents/test_legal_agent.py`
+  - `test_returns_legal_answer_with_citations()`
+  - `test_graph_expansion_includes_related_articles()`
+  - `test_case_law_included_when_relevant()`
 
-- [x] **[Red]** `tests/streaming/test_redis_stream.py` 작성 (Redis mock)
-  - [x] XADD 호출 및 메시지 포맷 테스트
-  - [x] XREAD 결과 역직렬화 테스트
-  - [x] 에이전트별 채널 분리(stream:{channel}) 테스트
-- [x] **[Green]** `src/streaming/redis_stream.py` 구현
-- [x] **[Refactor]** JSON 직렬화/역직렬화 통일
-
----
-
-## 9. 스크립트 (`scripts/`)
-
-- [x] **[Red]** `tests/test_setup_index.py` 작성 (전체 파이프라인 mock)
-  - [x] 수집 → SHA 비교 → 임베딩 전체 흐름 테스트
-  - [x] 변경 없는 조항 스킵 테스트
-- [x] **[Green]** `scripts/setup_index.py` 구현
-- [x] **[Refactor]** changed_ids 집합 반환으로 선택적 색인
-
-### 9-2. load_html_laws.py
-- [x] **[Green]** `scripts/load_html_laws.py` 구현
-  - [x] `data/laws/*.html` 전체 로드 → parse_law_html → setup_index 파이프라인
-  - [x] 파일명 → law_id_prefix 매핑 테이블
-  - [x] 파싱 결과 요약 출력 (법령별 조문 수, 총계)
+### 4-3. 대화 세션 (`src/session/conversation.py`)
+- [ ] `ConversationSession` — `session_id`, `history: list[dict]`, `context_window=10`
+- [ ] Redis 기반 세션 저장 (TTL: 3600s)
+- [ ] LangChain `ConversationBufferWindowMemory` 연동
+- [ ] TDD: `tests/session/test_conversation.py`
+  - `test_session_create_and_load()`
+  - `test_history_truncated_at_context_window()`
+  - `test_session_expires_after_ttl()`
 
 ---
 
-## 10. 통합 테스트 (`tests/integration/`)
+## Phase 5 — FastAPI 재설계
 
-- [ ] `tests/integration/test_e2e_file.py` — 파일 입력 E2E
-  - [ ] 의도적 위반 코드 → 위반 항목 탐지 확인
-  - [ ] 준수 코드 → 준수 판정 확인
-- [ ] `tests/integration/test_e2e_url.py` — URL 입력 E2E
-- [ ] `tests/integration/test_cache_hit.py` — Semantic Cache 히트/미스
-- [ ] `tests/integration/test_stream_order.py` — Redis Stream 순서 보장
-- [ ] `tests/integration/test_citation_integrity.py` — Citation SHA 정합성
+> /api/chat (SSE 스트리밍) + 세션 관리 엔드포인트
 
----
+### 5-1. 채팅 엔드포인트 (`src/api/routers/chat.py`)
+- [ ] `POST /api/chat`
+  ```json
+  { "question": "전세보증금 반환 기한은?", "session_id": "uuid" }
+  ```
+  → SSE 스트리밍: `answer` 토큰 + 최종 `citations` JSON
+- [ ] `GET /api/sessions/{session_id}/history` — 대화 내역 반환
+- [ ] `DELETE /api/sessions/{session_id}` — 세션 삭제
+- [ ] TDD: `tests/api/test_chat.py`
+  - `test_chat_returns_sse_stream()`
+  - `test_citations_included_in_final_event()`
+  - `test_session_history_persisted()`
 
-## 11. Streamlit UI (`app.py`)
+### 5-2. 법령 검색 엔드포인트 (`src/api/routers/search.py`)
+- [ ] `GET /api/search?q=질문&type=law|case` — 직접 검색 (채팅 없이)
+- [ ] `GET /api/articles/{article_id}` — 단일 조문 상세 조회 + 연관 조문
 
-- [x] 입력 폼 (파일 업로드 / URL / 코드 직접 입력 탭)
-- [x] 분석 실행 버튼
-- [x] 준수 항목(✅) / 보완 항목(⚠️) 구분 출력
-- [x] Citation 카드 (SHA 앞 8자 + 원문 링크)
-- [x] 위반 항목 권고사항 표시
-
----
-
-## 12. 인프라 (`Docker`)
-
-- [x] `Dockerfile` 작성 (uv 멀티스테이지 빌드)
-- [x] `docker-compose.yml` 작성 (qdrant + redis + app)
-- [x] `.dockerignore` 작성
-- [ ] `docker compose up --build` 정상 기동 확인
+### 5-3. main.py 정리
+- [ ] parse 라우터 제거, chat/search 라우터 등록
+- [ ] LegalReasoningAgent + LawGraph 워밍업
 
 ---
 
-## 진행 현황 요약
+## Phase 6 — React UI 재설계
 
-| 모듈 | 테스트 작성 | 구현 | 리팩터 |
-|------|------------|------|--------|
-| 프로젝트 초기 설정 | - | **완료** | - |
-| core/models | **완료** | **완료** | **완료** |
-| core/config | **완료** | **완료** | **완료** |
-| integrity/hasher | **완료** | **완료** | **완료** |
-| integrity/db | **완료** | **완료** | **완료** |
-| collector/parser | **완료** | **완료** | **완료** |
-| collector/law_api | **완료** | **완료** | **완료** |
-| collector/scheduler | **완료** | **완료** | **완료** |
-| embedder/chunker | **완료** | **완료** | **완료** |
-| embedder/indexer | **완료** | **완료** | **완료** |
-| input/file_loader | **완료** | **완료** | **완료** |
-| input/url_parser | **완료** | **완료** | **완료** |
-| input/token_splitter | **완료** | **완료** | **완료** |
-| retrieval/cache | **완료** | **완료** | **완료** |
-| retrieval/bm25 | **완료** | **완료** | **완료** |
-| retrieval/vector | **완료** | **완료** | **완료** |
-| retrieval/rrf | **완료** | **완료** | **완료** |
-| retrieval/dynamic_topk | **완료** | **완료** | **완료** |
-| retrieval/query_rewriter | **완료** | **완료** | **완료** |
-| agents/citation | **완료** | **완료** | **완료** |
-| agents/privacy | **완료** | **완료** | **완료** |
-| agents/security | **완료** | **완료** | **완료** |
-| agents/service | **완료** | **완료** | **완료** |
-| agents/orchestrator | **완료** | **완료** | **완료** |
-| streaming/redis_stream | **완료** | **완료** | **완료** |
-| cache/url_cache | **완료** | **완료** | **완료** |
-| scripts/setup_index | **완료** | **완료** | **완료** |
-| 통합 테스트 | 미완료 | - | - |
-| Streamlit UI | - | **완료** | - |
-| Docker 인프라 | - | **완료** | - |
+> 좌: 대화창 / 우: Citation 패널 (법령 원문 + 판례)
+
+### 6-1. 레이아웃 구성
+- [ ] `ChatPanel` (좌) — 질문 입력 + SSE 스트리밍 응답
+- [ ] `CitationPanel` (우) — 응답과 연동된 인용 카드
+  - 법령 카드: 법령명 · 조항번호 · 원문 · SHA-256
+  - 판례 카드: 사건번호 · 법원 · 선고일 · 판결요지
+- [ ] 인용 번호 클릭 시 우측 패널 해당 카드로 스크롤
+
+### 6-2. 상태 관리
+- [ ] SSE 스트리밍 → `useEventSource` 훅
+- [ ] 세션 ID 로컬스토리지 유지
+- [ ] 대화 내역 무한 스크롤
+
+### 6-3. 법령 관계 시각화 (선택)
+- [ ] D3.js / Cytoscape.js — 연관 조문 그래프 미니맵
+
+---
+
+## 우선순위 실행 계획
+
+```
+[즉시] Phase 0  → 정리·삭제 (TDD 그린 유지하며 제거)
+[1주]  Phase 1  → 법령목록 + 법령본문 + 판례 API (TDD)
+[1주]  Phase 2  → 조문 청킹 개선 + Qdrant 저장
+[1주]  Phase 3  → 법령 관계 그래프
+[1주]  Phase 4  → LegalReasoningAgent + 세션
+[1주]  Phase 5  → FastAPI /api/chat
+[1주]  Phase 6  → React UI
+```
+
+---
+
+## 기술 스택 (변경 후)
+
+| 항목 | 기술 |
+|------|------|
+| LLM | GPT-4o-mini (openai>=1.35) |
+| Embedding | text-embedding-3-small |
+| Vector DB | Qdrant — `laws` + `cases` 컬렉션 |
+| 법령 관계 | NetworkX (DiGraph) |
+| 대화 메모리 | LangChain ConversationBufferWindowMemory + Redis |
+| 검색 | BM25 + Vector + RRF (HybridRetriever) |
+| API | FastAPI + SSE |
+| Frontend | React + Vite |
+| 인프라 | Docker Compose (qdrant · redis · api · worker · frontend) |
+
+---
+
+*Last updated: 2026-03-08*
