@@ -46,7 +46,15 @@ function AssistantMarkdown({
   onCitationClick: (id: string) => void;
 }) {
   const patterns = citations
-    .map((c, i) => ({ pattern: `${c.law_name} ${c.article_number}`, id: c.article_id, index: i + 1 }))
+    .map((c, i) => ({
+      // 판례: LLM이 사건번호(예: "2024다123")로 언급 → case_number(=article_number) 매칭
+      // 법령: "주택법 제1조" 형태 매칭
+      pattern: c.article_id.startsWith('CASE_')
+        ? c.article_number
+        : `${c.law_name} ${c.article_number}`,
+      id: c.article_id,
+      index: i + 1,
+    }))
     .sort((a, b) => b.pattern.length - a.pattern.length);
 
   const processed = patterns.length ? injectCiteMarkers(text, patterns) : text;
