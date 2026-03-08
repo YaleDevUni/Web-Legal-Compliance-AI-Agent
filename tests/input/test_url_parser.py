@@ -45,14 +45,14 @@ class TestURLParser:
         assert any("개인정보처리방침" in v for v in result["meta"].values())
 
     @rsps_lib.activate
-    def test_extracts_js_css_links(self):
-        """<script src> / <link rel=stylesheet> 절대 URL 목록 추출 확인"""
+    def test_returns_expected_keys(self):
+        """반환 딕셔너리에 combined, text, links, meta, subpages 키 포함"""
         from input.url_parser import parse_url
         rsps_lib.add(rsps_lib.GET, "https://example.com/", body=SAMPLE_HTML, status=200,
                      content_type="text/html")
         result = parse_url("https://example.com/")
-        assert any("app.js" in s for s in result["scripts"])
-        assert any("style.css" in s for s in result["stylesheets"])
+        for key in ("combined", "text", "links", "meta", "subpages"):
+            assert key in result
 
     def test_invalid_url_raises(self):
         """scheme/netloc 없는 URL → ValueError("유효하지 않은 URL") 발생"""

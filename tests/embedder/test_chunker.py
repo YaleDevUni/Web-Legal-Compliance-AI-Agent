@@ -26,32 +26,33 @@ def sample_article():
 
 class TestChunker:
     def test_short_text_returns_single_chunk(self, sample_article):
-        """chunk_size보다 짧은 텍스트 → 단일 청크 반환"""
+        """단일 문단 텍스트 → 단일 청크 반환"""
         from embedder.chunker import chunk_article
-        chunks = chunk_article(sample_article, chunk_size=500, chunk_overlap=50)
+        chunks = chunk_article(sample_article)
         assert len(chunks) == 1
 
     def test_long_text_returns_multiple_chunks(self):
-        """chunk_size(100자) 초과 텍스트 → 복수 청크 반환"""
+        """여러 문단(개행 구분) 텍스트 → 복수 청크 반환"""
         from embedder.chunker import chunk_article
         from core.models import LawArticle
-        long_content = "가나다라마바사아자차카타파하 " * 200
+        # 개행으로 구분된 여러 문단
+        multi_para_content = "\n".join([f"제{i}항 내용입니다." for i in range(1, 6)])
         article = LawArticle(
             article_id="PA_99",
             law_name="개인정보 보호법",
             article_number="제99조",
-            content=long_content,
+            content=multi_para_content,
             sha256="b" * 64,
             url="https://www.law.go.kr/",
             updated_at=datetime(2024, 1, 1),
         )
-        chunks = chunk_article(article, chunk_size=100, chunk_overlap=20)
+        chunks = chunk_article(article)
         assert len(chunks) > 1
 
     def test_chunk_metadata_preserved(self, sample_article):
         """모든 청크에 article_id, law_name, sha256, article_number 메타데이터 보존"""
         from embedder.chunker import chunk_article
-        chunks = chunk_article(sample_article, chunk_size=500, chunk_overlap=50)
+        chunks = chunk_article(sample_article)
         meta = chunks[0]["metadata"]
         assert meta["article_id"] == "PA_3"
         assert meta["law_name"] == "개인정보 보호법"
@@ -61,25 +62,13 @@ class TestChunker:
     def test_chunk_has_text_key(self, sample_article):
         """각 청크 딕셔너리에 "text" 키 존재, 비어있지 않음"""
         from embedder.chunker import chunk_article
-        chunks = chunk_article(sample_article, chunk_size=500, chunk_overlap=50)
+        chunks = chunk_article(sample_article)
         assert "text" in chunks[0]
         assert len(chunks[0]["text"]) > 0
 
-    def test_overlap_applied(self):
-        """chunk_overlap 적용 시 두 번째 청크 시작부분이 첫 번째 청크 내에 포함됨"""
+    def test_chunk_text_includes_title_prefix(self, sample_article):
+        """각 청크 텍스트에 법령명·조항 제목이 포함됨"""
         from embedder.chunker import chunk_article
-        from core.models import LawArticle
-        long_content = "ABCDEFGHIJ" * 50
-        article = LawArticle(
-            article_id="PA_1",
-            law_name="테스트법",
-            article_number="제1조",
-            content=long_content,
-            sha256="c" * 64,
-            url="https://www.law.go.kr/",
-            updated_at=datetime(2024, 1, 1),
-        )
-        chunks = chunk_article(article, chunk_size=100, chunk_overlap=20)
-        if len(chunks) > 1:
-            # 두 번째 청크 시작이 첫 번째 청크 끝 부분과 겹쳐야 함
-            assert chunks[1]["text"][:10] in chunks[0]["text"]
+        chunks = chunk_article(sample_article)
+        assert "개인정보 보호법" in chunks[0]["text"]
+        assert "제3조" in chunks[0]["text"]

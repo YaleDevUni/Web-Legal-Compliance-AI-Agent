@@ -175,12 +175,12 @@ class TestComplianceReport:
         assert report.is_violation is True
         assert report.is_compliant is False
 
-    def test_report_requires_at_least_one_citation(self):
-        """citations=[] → ValidationError (min_length=1 제약)"""
+    def test_report_allows_empty_citations(self):
+        """citations=[] 허용 (unverifiable 등 법령 미적용 케이스)"""
         from core.models import ComplianceReport, ComplianceStatus
-        with pytest.raises(ValidationError):
-            ComplianceReport(
-                status=ComplianceStatus.COMPLIANT,
-                description="설명",
-                citations=[],  # 빈 citations
-            )
+        report = ComplianceReport(
+            status=ComplianceStatus.COMPLIANT,
+            description="설명",
+            citations=[],
+        )
+        assert report.citations == []

@@ -46,8 +46,8 @@ class TestParseCodeSnippet:
             "violation|민감정보 무단 처리|PA_23|db.save(health_data)",
             chunk_index=_SAMPLE_CHUNK_INDEX,
         )
-        assert result is not None
-        assert result.recommendation == "db.save(health_data)"
+        assert len(result) > 0
+        assert result[0].recommendation == "db.save(health_data)"
 
     def test_code_snippet_with_pipe_inside_snippet(self, mocker):
         """code_snippet 내부에 | 포함 → maxsplit=3으로 올바르게 보존됨"""
@@ -57,8 +57,8 @@ class TestParseCodeSnippet:
             "violation|민감정보 무단 처리|PA_23|cat file | grep password",
             chunk_index=_SAMPLE_CHUNK_INDEX,
         )
-        assert result is not None
-        assert result.recommendation == "cat file | grep password"
+        assert len(result) > 0
+        assert result[0].recommendation == "cat file | grep password"
 
     def test_no_code_snippet_returns_empty(self, mocker):
         """code_snippet 없이 3개 필드 → recommendation 빈 문자열"""
@@ -68,14 +68,14 @@ class TestParseCodeSnippet:
             "compliant|동의 확인됨|PA_15",
             chunk_index=_SAMPLE_CHUNK_INDEX,
         )
-        assert result is not None
-        assert result.recommendation == ""
+        assert len(result) > 0
+        assert result[0].recommendation == ""
 
-    def test_fewer_than_3_parts_returns_none(self, mocker):
-        """3개 미만 → None 반환"""
+    def test_fewer_than_3_parts_returns_empty_list(self, mocker):
+        """3개 미만 → 빈 리스트 반환"""
         mocker.patch("agents._base_agent.ChatOpenAI")
         from agents._base_agent import _parse_llm_response
-        assert _parse_llm_response("violation|설명", chunk_index={}) is None
+        assert _parse_llm_response("violation|설명", chunk_index={}) == []
 
 
 # ── chunk_index 기반 Citation 구성 테스트 ──────────────────────────────────
@@ -89,10 +89,10 @@ class TestCitationFromChunkIndex:
             "violation|민감정보 무단 처리|PA_23|",
             chunk_index=_SAMPLE_CHUNK_INDEX,
         )
-        assert result is not None
-        assert result.citations[0].sha256 == "a" * 64
-        assert result.citations[0].law_name == "개인정보 보호법"
-        assert result.citations[0].article_number == "제23조"
+        assert len(result) > 0
+        assert result[0].citations[0].sha256 == "a" * 64
+        assert result[0].citations[0].law_name == "개인정보 보호법"
+        assert result[0].citations[0].article_number == "제23조"
 
     def test_citation_includes_article_content(self, mocker):
         """Citation에 법령 조문 텍스트(article_content)가 포함됨"""
@@ -102,8 +102,8 @@ class TestCitationFromChunkIndex:
             "violation|민감정보 무단 처리|PA_23|",
             chunk_index=_SAMPLE_CHUNK_INDEX,
         )
-        assert result is not None
-        assert "제23조" in result.citations[0].article_content
+        assert len(result) > 0
+        assert "제23조" in result[0].citations[0].article_content
 
     def test_citation_fallback_when_article_id_not_in_index(self, mocker):
         """chunk_index에 없는 article_id → fallback Citation (기본값 사용)"""
@@ -113,9 +113,9 @@ class TestCitationFromChunkIndex:
             "violation|알 수 없는 위반|UNKNOWN_99|some_code()",
             chunk_index=_SAMPLE_CHUNK_INDEX,
         )
-        assert result is not None
-        assert result.citations[0].article_id == "UNKNOWN_99"
-        assert len(result.citations[0].sha256) == 64  # 기본값이라도 유효한 sha256
+        assert len(result) > 0
+        assert result[0].citations[0].article_id == "UNKNOWN_99"
+        assert len(result[0].citations[0].sha256) == 64  # 기본값이라도 유효한 sha256
 
 
 # ── SourceLocation 모델 테스트 ─────────────────────────────────────────────

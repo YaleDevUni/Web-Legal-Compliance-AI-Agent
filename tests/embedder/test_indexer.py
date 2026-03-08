@@ -34,16 +34,17 @@ def indexer(mock_qdrant, mocker):
 
 class TestArticleIndexer:
     def test_collection_created_if_not_exists(self, indexer, mock_qdrant):
-        """컬렉션 미존재 시 create_collection 자동 호출"""
+        """컬렉션 미존재 시 create_collection 호출"""
         mock_qdrant.collection_exists.return_value = False
-        indexer._ensure_collection()
+        indexer.recreate_collection()
         mock_qdrant.create_collection.assert_called_once()
 
-    def test_collection_not_recreated_if_exists(self, indexer, mock_qdrant):
-        """컬렉션 이미 존재 시 create_collection 미호출"""
+    def test_collection_deleted_and_recreated_if_exists(self, indexer, mock_qdrant):
+        """컬렉션 존재 시 삭제 후 재생성"""
         mock_qdrant.collection_exists.return_value = True
-        indexer._ensure_collection()
-        mock_qdrant.create_collection.assert_not_called()
+        indexer.recreate_collection()
+        mock_qdrant.delete_collection.assert_called_once()
+        mock_qdrant.create_collection.assert_called_once()
 
     def test_upsert_calls_qdrant(self, indexer, mock_qdrant, article, mocker):
         """changed_ids 미지정(전체 색인) → qdrant.upsert 1회 호출"""
