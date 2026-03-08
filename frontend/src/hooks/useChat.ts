@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Message, Citation, ChatContentEvent, ChatCitationsEvent } from '../types';
 
@@ -35,10 +35,16 @@ export function useChat() {
   const [streamingAnswer, setStreamingAnswer] = useState('');
   const [currentCitations, setCurrentCitations] = useState<Citation[]>([]);
   const [activeCitationId, setActiveCitationId] = useState<string | null>(null);
-  // 현재 진행 중인 사용자 질문 (즉시 UI 반영용)
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 스트림이 끝나고 history 갱신을 기다리는 중인지 표시
+  const [awaitingHistory, setAwaitingHistory] = useState(false);
+
+  // ask() 호출 전의 history 길이를 기억 (새 메시지 도착 감지용)
+  const prevHistoryLenRef = useRef(0);
+  // 항상 최신 history를 참조 (useCallback 클로저 stale 방지)
+  const historyRef = useRef<Message[]>([]);
 
   // 대화 내역 조회
   const { data: history = [] } = useQuery({
@@ -52,6 +58,20 @@ export function useChat() {
     enabled: !!sessionId,
   });
 
+  historyRef.current = history;
+
+  // history가 갱신되면 스트리밍 표시 상태 해제
+  useEffect(() => {
+    if (!awaitingHistory) return;
+    // ask() 시작 전보다 history가 늘어났으면 서버가 새 대화를 확정한 것
+    if (history.length > prevHistoryLenRef.current) {
+      setStreamingAnswer('');
+      setPendingUserMessage(null);
+      setLoading(false);
+      setAwaitingHistory(false);
+    }
+  }, [history, awaitingHistory]);
+
   // 세션 초기화
   const resetSession = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
@@ -61,16 +81,19 @@ export function useChat() {
     setActiveCitationId(null);
     setStreamingAnswer('');
     setPendingUserMessage(null);
+    setAwaitingHistory(false);
   }, [queryClient]);
 
   // 질문 전송 (SSE)
   const ask = useCallback(async (question: string) => {
+    // ask 시작 전 history 길이 기록
+    prevHistoryLenRef.current = historyRef.current.length;
+
     setLoading(true);
     setError(null);
     setStreamingAnswer('');
     setActiveCitationId(null);
-    // 사용자 메시지 즉시 표시
-    setPendingUserMessage(question);
+    setPendingUserMessage(question); // 질문 즉시 표시
 
     let resolvedSessionId = sessionId;
 
@@ -108,31 +131,26 @@ export function useChat() {
           } else if (event === 'error') {
             setError(payload.message);
           }
-          // done은 루프 밖에서 처리
         });
       }
 
-      // 스트림 종료 후: history 갱신 → streamingAnswer + pendingUserMessage 제거
+      // 스트림 종료: history 갱신을 트리거하고 useEffect가 완료를 처리
       if (resolvedSessionId) {
-        await queryClient.fetchQuery({
+        void queryClient.invalidateQueries({
           queryKey: ['chatHistory', resolvedSessionId],
-          queryFn: async () => {
-            const res = await fetch(`/api/sessions/${resolvedSessionId}/history`);
-            if (!res.ok) return [] as Message[];
-            return res.json() as Promise<Message[]>;
-          },
         });
       }
+      setAwaitingHistory(true);
+      // loading / streamingAnswer / pendingUserMessage는 history 갱신 후 useEffect에서 해제
     } catch (e: any) {
       setError(e.message);
-    } finally {
       setStreamingAnswer('');
       setPendingUserMessage(null);
       setLoading(false);
     }
   }, [sessionId, queryClient]);
 
-  // history에 pendingUserMessage 병합 (서버 확정 전까지만)
+  // displayHistory: pendingUserMessage는 history에 아직 없을 때만 추가
   const displayHistory: Message[] = pendingUserMessage
     ? [...history, { role: 'user', content: pendingUserMessage }]
     : history;
