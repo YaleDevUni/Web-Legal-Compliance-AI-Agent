@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 import type { Message, Citation } from '../types';
 
 interface ChatPanelProps {
@@ -12,53 +15,93 @@ interface ChatPanelProps {
   onReset: () => void;
 }
 
-/** 텍스트에서 citation 패턴을 찾아 [N] 클릭 마커를 삽입한다 */
-function renderWithCitations(
-  text: string,
-  citations: Citation[],
-  activeCitationId: string | null,
-  onCitationClick: (id: string) => void
-): React.ReactNode {
-  if (!citations.length) return <>{text}</>;
+const CITE_RE = /^%%CITE:([^:]+):(\d+)%%$/;
 
-  // 패턴 길이 내림차순 정렬 (긴 패턴 우선 매칭)
+/** citation 패턴을 특수 마커(인라인 코드)로 치환 — ReactMarkdown이 code로 파싱함 */
+function injectCiteMarkers(
+  text: string,
+  patterns: Array<{ pattern: string; id: string; index: number }>
+): string {
+  let result = text;
+  for (const p of patterns) {
+    const esc = p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(
+      new RegExp(esc, 'g'),
+      `${p.pattern}\`%%CITE:${p.id}:${p.index}%%\``
+    );
+  }
+  return result;
+}
+
+/** assistant 답변용 Markdown 렌더러 (citation 마커 + MD 포맷 지원) */
+function AssistantMarkdown({
+  text,
+  citations,
+  activeCitationId,
+  onCitationClick,
+}: {
+  text: string;
+  citations: Citation[];
+  activeCitationId: string | null;
+  onCitationClick: (id: string) => void;
+}) {
   const patterns = citations
-    .map((c, i) => ({
-      pattern: `${c.law_name} ${c.article_number}`,
-      index: i + 1,
-      id: c.article_id,
-    }))
+    .map((c, i) => ({ pattern: `${c.law_name} ${c.article_number}`, id: c.article_id, index: i + 1 }))
     .sort((a, b) => b.pattern.length - a.pattern.length);
 
-  const escaped = patterns.map((p) =>
-    p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  );
-  const regex = new RegExp(`(${escaped.join('|')})`, 'g');
-  const parts = text.split(regex);
+  const processed = patterns.length ? injectCiteMarkers(text, patterns) : text;
 
-  return (
-    <>
-      {parts.map((part, i) => {
-        const match = patterns.find((p) => p.pattern === part);
-        if (!match) return <span key={i}>{part}</span>;
-        const isActive = activeCitationId === match.id;
-        return (
-          <span key={i}>
-            {part}
+  const components: Components = {
+    // citation 마커 처리 + 일반 인라인 코드 스타일
+    code({ children, className }) {
+      if (!className) {
+        const str = String(children);
+        const m = str.match(CITE_RE);
+        if (m) {
+          const [, id, idx] = m;
+          const isActive = activeCitationId === id;
+          return (
             <button
-              onClick={() => onCitationClick(match.id)}
+              onClick={() => onCitationClick(id)}
               className={`inline-flex items-center justify-center w-[18px] h-[18px] ml-0.5 text-[9px] font-bold rounded cursor-pointer align-super transition-colors ${
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                isActive ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
               }`}
             >
-              {match.index}
+              {idx}
             </button>
-          </span>
-        );
-      })}
-    </>
+          );
+        }
+        return <code className="px-1 py-0.5 bg-slate-200 text-slate-700 rounded text-[11px] font-mono">{children}</code>;
+      }
+      // 펜스드 코드 블록
+      return <code className={`${className} text-[11px]`}>{children}</code>;
+    },
+    p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+    h1: ({ children }) => <h1 className="text-base font-bold mb-1 mt-3 first:mt-0">{children}</h1>,
+    h2: ({ children }) => <h2 className="text-sm font-bold mb-1 mt-3 first:mt-0">{children}</h2>,
+    h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+    strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+    em: ({ children }) => <em className="italic">{children}</em>,
+    blockquote: ({ children }) => (
+      <blockquote className="border-l-2 border-slate-400 pl-3 my-2 text-slate-600 italic">{children}</blockquote>
+    ),
+    hr: () => <hr className="border-slate-300 my-2" />,
+    a: ({ href, children }) => (
+      <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline underline-offset-2 hover:text-blue-800">
+        {children}
+      </a>
+    ),
+  };
+
+  return (
+    <div className="text-sm leading-relaxed">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {processed}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -88,7 +131,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInput('');
   };
 
-  // 마지막 assistant 메시지 인덱스 (citation 마커 적용 대상)
   const lastAssistantIdx = history.reduceRight(
     (found, msg, i) => (found === -1 && msg.role === 'assistant' ? i : found),
     -1
@@ -125,11 +167,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   : 'bg-slate-100 text-slate-800 rounded-tl-none'
               }`}
             >
-              <p className="whitespace-pre-wrap leading-relaxed">
-                {msg.role === 'assistant' && i === lastAssistantIdx && citations.length > 0
-                  ? renderWithCitations(msg.content, citations, activeCitationId, onCitationClick)
-                  : msg.content}
-              </p>
+              {msg.role === 'assistant' ? (
+                <AssistantMarkdown
+                  text={msg.content}
+                  citations={i === lastAssistantIdx ? citations : []}
+                  activeCitationId={activeCitationId}
+                  onCitationClick={onCitationClick}
+                />
+              ) : (
+                <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+              )}
             </div>
           </div>
         ))}
@@ -137,14 +184,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         {streamingAnswer && (
           <div className="flex justify-start">
             <div className="max-w-[85%] px-4 py-2.5 rounded-2xl text-sm bg-slate-100 text-slate-800 rounded-tl-none border-l-4 border-blue-400">
-              <p className="whitespace-pre-wrap leading-relaxed">
-                {citations.length > 0
-                  ? renderWithCitations(streamingAnswer, citations, activeCitationId, onCitationClick)
-                  : streamingAnswer}
-                {loading && (
-                  <span className="inline-block w-1 h-4 ml-1 bg-blue-400 animate-pulse align-middle" />
-                )}
-              </p>
+              <AssistantMarkdown
+                text={streamingAnswer}
+                citations={citations}
+                activeCitationId={activeCitationId}
+                onCitationClick={onCitationClick}
+              />
+              {loading && (
+                <span className="inline-block w-1 h-4 mt-1 bg-blue-400 animate-pulse align-middle" />
+              )}
             </div>
           </div>
         )}
