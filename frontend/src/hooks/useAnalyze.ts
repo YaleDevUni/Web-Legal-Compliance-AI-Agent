@@ -9,6 +9,28 @@ type AnalyzeState = {
   done: boolean;
 };
 
+function parseSseChunk(
+  chunk: string,
+  onEvent: (event: string, data: string) => void
+): string {
+  const lines = chunk.split('\n');
+  const remaining = lines.pop() ?? '';
+  let event = '';
+  let data = '';
+  for (const line of lines) {
+    if (line.startsWith('event: ')) {
+      event = line.slice(7).trim();
+    } else if (line.startsWith('data: ')) {
+      data = line.slice(6).trim();
+    } else if (line === '' && event && data) {
+      onEvent(event, data);
+      event = '';
+      data = '';
+    }
+  }
+  return remaining;
+}
+
 export function useAnalyze() {
   const [state, setState] = useState<AnalyzeState>({
     reports: [],
@@ -21,7 +43,6 @@ export function useAnalyze() {
   const abortRef = useRef<AbortController | null>(null);
 
   const run = useCallback(async (request: AnalyzeRequest) => {
-    // 이전 요청 중단
     abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
@@ -29,18 +50,32 @@ export function useAnalyze() {
     setState({ reports: [], loading: true, error: null, cached: false, done: false });
 
     try {
-      const response = await fetch('/api/analyze', {
+      // 1. job 등록 → job_id 즉시 수신
+      const enqueueRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
         signal: abort.signal,
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (!enqueueRes.ok) {
+        const err = await enqueueRes.json().catch(() => ({}));
+        throw new Error(err.detail ?? `HTTP ${enqueueRes.status}`);
       }
 
-      const reader = response.body!.getReader();
+      const { job_id, cached } = await enqueueRes.json();
+      if (cached) {
+        setState((prev) => ({ ...prev, cached: true }));
+      }
+
+      // 2. SSE 구독으로 결과 수신
+      const sseRes = await fetch(`/api/analyze/${job_id}/events`, {
+        signal: abort.signal,
+      });
+
+      if (!sseRes.ok) throw new Error(`SSE HTTP ${sseRes.status}`);
+
+      const reader = sseRes.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -49,25 +84,7 @@ export function useAnalyze() {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        let event = '';
-        let data = '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            event = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            data = line.slice(6).trim();
-          } else if (line === '') {
-            if (event && data) {
-              handleEvent(event, data);
-              event = '';
-              data = '';
-            }
-          }
-        }
+        buffer = parseSseChunk(buffer, handleEvent);
       }
     } catch (e: unknown) {
       if ((e as Error).name !== 'AbortError') {
@@ -77,14 +94,12 @@ export function useAnalyze() {
 
     function handleEvent(event: string, data: string) {
       const payload = JSON.parse(data);
-      if (event === 'cached') {
-        setState((prev) => ({ ...prev, cached: true }));
-      } else if (event === 'report') {
+      if (event === 'report') {
         setState((prev) => ({ ...prev, reports: [...prev.reports, payload as ComplianceReport] }));
       } else if (event === 'error') {
         setState((prev) => ({ ...prev, loading: false, error: payload.message }));
       } else if (event === 'done') {
-        setState((prev) => ({ ...prev, loading: false, done: true }));
+        setState((prev) => ({ ...prev, loading: false, done: true, cached: payload.cached ?? prev.cached }));
       }
     }
   }, []);
