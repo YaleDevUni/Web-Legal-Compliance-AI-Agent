@@ -20,9 +20,12 @@ class ConversationSession:
         self._context_window = context_window
         self._ttl = ttl
 
-    def add_message(self, role: str, content: str) -> None:
+    def add_message(self, role: str, content: str, citations: Optional[List[Dict]] = None) -> None:
         """대화 내역에 메시지를 추가한다."""
         msg = {"role": role, "content": content}
+        if citations:
+            msg["citations"] = citations
+            
         self._redis.rpush(self._key, json.dumps(msg))
         
         # 윈도우 크기 유지 (LTRIM)

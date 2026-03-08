@@ -7,8 +7,9 @@ import type { Message, Citation } from '../types';
 interface ChatPanelProps {
   history: Message[];
   streamingAnswer: string;
+  streamingCitations: Citation[]; // 현재 스트리밍 중인 인용구 목록
   loading: boolean;
-  citations: Citation[];
+  citations: Citation[]; // 전체 세션 인용구 (Global Registry)
   activeCitationId: string | null;
   onCitationClick: (id: string) => void;
   onSend: (text: string) => void;
@@ -20,34 +21,39 @@ const BRACKET_CITE_RE = /\[(\d+)\]/g;
 /** assistant 답변용 Markdown 렌더러 */
 function AssistantMarkdown({
   text,
-  citations,
+  messageCitations, // 이 메시지만의 로컬 인용구 목록
+  globalCitations,  // 전체 세션의 글로벌 인용구 목록
   activeCitationId,
   onCitationClick,
 }: {
   text: string;
-  citations: Citation[];
+  messageCitations: Citation[];
+  globalCitations: Citation[];
   activeCitationId: string | null;
   onCitationClick: (id: string) => void;
 }) {
   
-  // [1] -> %%CITE:1%% 로 치환 (마크다운 파싱 전)
-  // 볼드(**) 기호와 인접해도 파싱이 깨지지 않도록 백틱(`)으로 감싸 인라인 코드로 인식하게 함
   const processed = text.replace(BRACKET_CITE_RE, (_, p1) => {
     return `\`%%CITE:${p1}%%\``;
   });
 
   const components: Components = {
-    // 인용 버튼 렌더러
     code({ children, className }) {
       if (!className) {
         const str = String(children);
         if (str.startsWith('%%CITE:') && str.endsWith('%%')) {
-          const idx = parseInt(str.slice(7, -2));
-          const citation = citations[idx - 1];
-          const id = citation?.article_id;
-          const isActive = id && activeCitationId === id;
+          const localIdx = parseInt(str.slice(7, -2));
+          // 1. 해당 메시지의 로컬 인용구 리스트에서 찾음
+          const citation = messageCitations[localIdx - 1];
           
-          if (!id) return <span className="text-slate-400 text-[10px]">[{idx}]</span>;
+          if (!citation) return <span className="text-slate-400 text-[10px]">[{localIdx}]</span>;
+
+          // 2. 글로벌 리스트에서 해당 조문의 인덱스를 찾음 (Global Indexing)
+          const globalIdx = globalCitations.findIndex(c => c.article_id === citation.article_id);
+          const displayNum = globalIdx !== -1 ? globalIdx + 1 : localIdx;
+
+          const id = citation.article_id;
+          const isActive = id && activeCitationId === id;
 
           return (
             <button
@@ -55,8 +61,9 @@ function AssistantMarkdown({
               className={`inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 mx-0.5 text-[9px] font-bold rounded cursor-pointer align-super transition-all ${
                 isActive ? 'bg-blue-600 text-white shadow-sm scale-110' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'
               }`}
+              title={`${citation.law_name} ${citation.article_number}`}
             >
-              {idx}
+              {displayNum}
             </button>
           );
         }
@@ -64,7 +71,6 @@ function AssistantMarkdown({
       }
       return <code className={`${className} text-[11px]`}>{children}</code>;
     },
-    // 마크다운 기본 태그 스타일 정의 (볼드 누락 해결)
     p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
     strong: ({ children }) => <strong className="font-extrabold text-slate-900">{children}</strong>,
     em: ({ children }) => <em className="italic text-slate-800">{children}</em>,
@@ -97,8 +103,9 @@ function AssistantMarkdown({
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   history,
   streamingAnswer,
+  streamingCitations,
   loading,
-  citations,
+  citations, // Global Citations
   activeCitationId,
   onCitationClick,
   onSend,
@@ -164,7 +171,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               {msg.role === 'assistant' ? (
                 <AssistantMarkdown
                   text={msg.content}
-                  citations={citations}
+                  messageCitations={msg.citations || []} // 과거 히스토리의 인용구 사용
+                  globalCitations={citations}            // 글로벌 인덱싱을 위한 전체 리스트
                   activeCitationId={activeCitationId}
                   onCitationClick={onCitationClick}
                 />
@@ -180,7 +188,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <div className="max-w-[88%] px-5 py-3.5 rounded-2xl text-[14px] leading-relaxed bg-slate-50 text-slate-800 rounded-tl-none border border-slate-100 border-l-4 border-l-blue-500 shadow-sm">
               <AssistantMarkdown
                 text={streamingAnswer}
-                citations={citations}
+                messageCitations={streamingCitations} // 현재 스트리밍 중인 인용구 사용
+                globalCitations={citations}           // 글로벌 인덱싱을 위한 전체 리스트
                 activeCitationId={activeCitationId}
                 onCitationClick={onCitationClick}
               />

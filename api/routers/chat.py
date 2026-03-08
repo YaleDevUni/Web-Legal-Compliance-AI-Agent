@@ -40,6 +40,7 @@ async def chat(
             session.add_message("user", body.question)
             
             full_answer = ""
+            current_citations = []
             # 2. 에이전트 비동기 스트림 실행
             async for chunk in agent.aask(body.question, session_id, history):
                 if chunk["type"] == "content":
@@ -48,6 +49,7 @@ async def chat(
                 elif chunk["type"] == "citations":
                     # 최종 인용 정보 전송
                     citations_data = [c.model_dump(mode="json") for c in chunk["citations"]]
+                    current_citations = citations_data # 저장용
                     yield _sse("citations", {
                         "citations": citations_data,
                         "related_articles": chunk["related_articles"],
@@ -55,9 +57,9 @@ async def chat(
                     })
                     full_answer = chunk["full_answer"]
             
-            # 3. AI 답변 저장 (최종 합본)
+            # 3. AI 답변 저장 (최종 합본 + 인용 정보)
             if full_answer:
-                session.add_message("assistant", full_answer)
+                session.add_message("assistant", full_answer, citations=current_citations)
             
             yield _sse("done", {"session_id": session_id})
             

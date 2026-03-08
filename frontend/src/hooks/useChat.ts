@@ -33,6 +33,7 @@ export function useChat() {
   });
 
   const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [streamingCitations, setStreamingCitations] = useState<Citation[]>([]);
   const [activeCitationId, setActiveCitationId] = useState<string | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,7 @@ export function useChat() {
   const prevHistoryLenRef = useRef(0);
   const historyRef = useRef<Message[]>([]);
 
-  // 대화 내역
+  // 대화 내역 (백엔드 세션 히스토리)
   const { data: history = [] } = useQuery({
     queryKey: ['chatHistory', sessionId],
     queryFn: async () => {
@@ -53,8 +54,8 @@ export function useChat() {
     enabled: !!sessionId,
   });
 
-  // 세션 citations
-  const { data: citations = [] } = useQuery<Citation[]>({
+  // 전체 세션 통합 citations (우측 패널용)
+  const { data: sessionCitations = [] } = useQuery<Citation[]>({
     queryKey: ['citations', sessionId],
     queryFn: () => {
       if (!sessionId) return [];
@@ -71,6 +72,7 @@ export function useChat() {
     if (!pendingUserMessage) return;
     if (history.length > prevHistoryLenRef.current + 1) {
       setStreamingAnswer('');
+      setStreamingCitations([]);
       setPendingUserMessage(null);
     }
   }, [history, pendingUserMessage]);
@@ -83,6 +85,7 @@ export function useChat() {
     setSessionId('');
     setActiveCitationId(null);
     setStreamingAnswer('');
+    setStreamingCitations([]);
     setPendingUserMessage(null);
     setRelatedArticleIds([]);
   }, [queryClient, sessionId]);
@@ -93,6 +96,7 @@ export function useChat() {
     setLoading(true);
     setError(null);
     setStreamingAnswer('');
+    setStreamingCitations([]);
     setActiveCitationId(null);
     setPendingUserMessage(question);
 
@@ -125,11 +129,17 @@ export function useChat() {
             const ev = payload as ChatCitationsEvent;
             const sid = ev.session_id || resolvedSessionId;
             
-            // 관련 조문 ID 업데이트
+            // 1. 현재 Turn의 인용구 저장 (스트리밍 버블용)
+            if (ev.citations && ev.citations.length > 0) {
+              setStreamingCitations(ev.citations);
+            }
+
+            // 2. 관련 조문 ID 업데이트
             if (ev.related_articles) {
               setRelatedArticleIds((prev) => Array.from(new Set([...prev, ...ev.related_articles])));
             }
 
+            // 3. 전체 세션 인용구 업데이트 (우측 패널)
             queryClient.setQueryData<Citation[]>(['citations', sid], (prev = []) => {
               const existingIds = new Set(prev.map((c) => c.article_id));
               const newOnes = ev.citations.filter((c) => !existingIds.has(c.article_id));
@@ -138,6 +148,7 @@ export function useChat() {
               localStorage.setItem(`citations:${sid}`, JSON.stringify(updated));
               return updated;
             });
+
             if (!sessionId) {
               resolvedSessionId = ev.session_id;
               setSessionId(ev.session_id);
@@ -159,6 +170,7 @@ export function useChat() {
     } catch (e: any) {
       setError(e.message);
       setStreamingAnswer('');
+      setStreamingCitations([]);
       setPendingUserMessage(null);
       setLoading(false);
     }
@@ -175,7 +187,8 @@ export function useChat() {
     sessionId,
     history: displayHistory,
     streamingAnswer,
-    citations,
+    streamingCitations,
+    citations: sessionCitations,
     activeCitationId,
     setActiveCitationId,
     relatedArticleIds,

@@ -54,6 +54,7 @@ function App() {
           <ChatPanel
             history={history}
             streamingAnswer={streamingAnswer}
+            streamingCitations={streamingCitations}
             loading={loading}
             citations={citations}
             activeCitationId={activeCitationId}

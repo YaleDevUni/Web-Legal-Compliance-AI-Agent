@@ -15,6 +15,7 @@ export interface Citation {
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
+  citations?: Citation[]; // 해당 메시지에서 인용된 목록
 }
 
 export interface ChatRequest {
