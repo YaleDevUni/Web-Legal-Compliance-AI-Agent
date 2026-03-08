@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from core.logger import logger
-from core.models import ComplianceReport
+from core.models import ComplianceReport, ComplianceStatus
 from agents.privacy_agent import PrivacyAgent
 from agents.security_agent import SecurityAgent
 from agents.service_agent import ServiceAgent
@@ -19,16 +19,26 @@ _INTENT_PROMPT = (
 
 _PURPOSE_PROMPT = (
     "다음 코드/텍스트를 분석하여 웹사이트의 주요 목적을 1~2단어로 요약하고, 해당 목적을 위해 반드시 준수해야 할 핵심 법규 분야를 '개인정보', '보안', '서비스' 중에서 모두 선택하세요. "
+    "\n\n"
+    "각 법규 분야 선택 기준 (반드시 준수):\n"
+    "- '개인정보': 회원가입, 로그인, 개인정보 수집 폼, 쿠키/트래킹이 있는 경우\n"
+    "- '보안': 로그인, 비밀번호, 인증, 결제 등 민감한 데이터 처리가 있는 경우\n"
+    "- '서비스': 실제 상품/서비스 판매, 결제 시스템, 유료 구독/청약이 있는 경우에만 선택. "
+    "정보 제공·전적 조회·커뮤니티·블로그 등 비상거래 사이트에는 선택하지 마세요.\n"
+    "\n"
     "다음 형식으로만 응답하세요(목적과 법규 분야는 | 로 구분): "
     "목적: [요약된 목적] | 법규: [선택된 법규 분야 쉼표로 구분]"
     "\n\n"
     "예시 1 (쇼핑몰):\n"
     "목적: 쇼핑몰 | 법규: 개인정보, 보안, 서비스"
     "\n\n"
-    "예시 2 (간단한 정보 블로그):\n"
-    "목적: 정보 블로그 | 법규: 개인정보, 보안"
+    "예시 2 (게임 전적 조회 사이트):\n"
+    "목적: 게임 전적 조회 | 법규: 개인정보, 보안"
     "\n\n"
-    "예시 3 (단순 회사소개 페이지):\n"
+    "예시 3 (정보 블로그):\n"
+    "목적: 정보 블로그 | 법규: 개인정보"
+    "\n\n"
+    "예시 4 (단순 회사소개 페이지):\n"
     "목적: 기업 홍보 | 법규: "
     "\n\n"
     "분석할 코드:\n"
@@ -105,8 +115,17 @@ class Orchestrator:
         # 4. 결과 후처리
         _DEFAULT_SHA = "0" * 64
         _META_DESCRIPTIONS = {"빈 문자열", "없음", "n/a", "compliant", "violation", ""}
-        return [
-            r for r in raw
-            if r.description.strip().lower() not in _META_DESCRIPTIONS
-            and not all(c.sha256 == _DEFAULT_SHA for c in r.citations)
-        ]
+
+        results = []
+        for r in raw:
+            if r.description.strip().lower() in _META_DESCRIPTIONS:
+                continue
+            # compliant인데 모든 citation이 기본 SHA → unverifiable로 재분류
+            if (
+                r.status == ComplianceStatus.COMPLIANT
+                and r.citations
+                and all(c.sha256 == _DEFAULT_SHA for c in r.citations)
+            ):
+                r = r.model_copy(update={"status": ComplianceStatus.UNVERIFIABLE, "citations": []})
+            results.append(r)
+        return results

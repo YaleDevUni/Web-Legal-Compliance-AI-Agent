@@ -50,10 +50,10 @@ def _build_law_context(chunks: list[dict]) -> tuple[str, dict[str, dict]]:
     lines: list[str] = []
     for aid, data in grouped_chunks.items():
         meta = data["meta"]
-        # 여러 텍스트 청크를 줄바꿈으로 합침
-        full_text = "\n\n".join(data["texts"])
+        # full_content가 있으면 전체 조문 사용 (어떤 문단 청크가 검색되든 완전한 법령 제공)
+        # 없으면 검색된 청크 텍스트를 합쳐 사용 (구버전 호환)
+        full_text = meta.get("full_content") or "\n\n".join(data["texts"])
 
-        # 최종적으로 index와 lines에 병합된 텍스트와 메타데이터 저장
         index[aid] = {**meta, "text": full_text}
         lines.append(
             f"[{aid}] {meta.get('law_name', '')} {meta.get('article_number', '')}\n"
@@ -114,6 +114,11 @@ def _parse_llm_response(
 
     # LLM 응답을 줄 단위로 분리하여 각 보고서 파싱
     for line in content.strip().split("\n"):
+        # Markdown 테이블 형식(| col | col |) 또는 구분선(|---|) 처리: 앞뒤 | 제거
+        line = line.strip().strip("|").strip()
+        # 구분선 행 스킵 (|---|---|)
+        if set(line.replace("|", "").replace("-", "").replace(" ", "")) == set():
+            continue
         parts = [p.strip() for p in line.split("|", maxsplit=3)]
         if len(parts) < 3:
             logger.warning(f"파싱 실패: LLM 응답 형식이 올바르지 않음 - '{line}'")
@@ -128,10 +133,21 @@ def _parse_llm_response(
             logger.warning(f"파싱 실패: 알 수 없는 상태 값 - '{status_str}' in '{line}'")
             continue
 
+        # unverifiable은 법령 citation 없이 처리
+        if status == ComplianceStatus.UNVERIFIABLE:
+            reports.append(
+                ComplianceReport(
+                    status=status,
+                    description=description,
+                    citations=[],
+                    recommendation="",
+                    source_location=None,
+                )
+            )
+            continue
+
         meta = chunk_index.get(article_id)
         if meta is None:
-            # chunk_index에 없으면 article_id에서 직접 법령 정보 구성 (fallback)
-            # UNKNOWN일 경우 빈 메타데이터로 처리
             meta = {"article_id": article_id, "law_name": "", "article_number": "",
                     "sha256": _DEFAULT_SHA, "url": "https://www.law.go.kr/",
                     "updated_at": "2024-01-01T00:00:00", "text": ""}
@@ -158,20 +174,26 @@ def _make_rag_instruction(available_ids: list[str]) -> str:
         f"위 [참고 법령] 목록에서 관련 조항을 선택하여 코드의 법령 준수 여부를 판단하세요. "
         f"사용 가능한 article_id 목록: [{ids_str}] — 이 목록 내에서 가장 적합한 article_id를 선택하여 주요 근거로 활용하십시오. 만약 제공된 법령만으로는 명확한 판단이 어렵거나, 관련성이 매우 낮아 보인다면, 당신의 지식을 활용하여 'compliant'로 응답하고, 이 경우에도 가장 근접한 article_id를 선택하거나 'UNKNOWN'으로 기입할 수 있습니다. "
         # Modified instruction
-        "코드에서 발견한 모든 법규 위반 사항을 개별적으로 보고해야 합니다. 각 위반 사항은 별도의 줄에 다음 형식으로 응답하세요 (| 구분, 정확히 4개 필드): "
+        "당신이 담당하는 법규 분야에서 점검한 각 항목에 대해 violation 또는 compliant 여부를 모두 보고하세요. "
+        "⚠️ 응답 형식 엄수: 반드시 아래 형식으로만 응답하고, 설명·서문·번호·마크다운·자연어 문장을 절대 포함하지 마세요. "
+        "각 항목은 별도의 줄에 다음 형식으로만 응답하세요 (| 구분, 정확히 4개 필드, 다른 텍스트 없음): "
         "status|description|article_id|code_snippet "
         "판단 기준 (매우 중요): "
-        "1) 코드에 위반 증거가 명확히 있을 때만 violation — 추측이나 가능성은 compliant. "
+        "1) violation vs compliant vs unverifiable 구분 기준: "
+        "  - violation: 법령이 요구하는 필수 요소(동의 폼, 개인정보처리방침 링크, 고지 문구 등)가 HTML/코드에 존재하지 않거나, 금지된 행위(평문 비밀번호 저장 등)가 코드에 명확히 있는 경우. "
+        "  - compliant: 법령이 요구하는 요소가 HTML/코드에 실제로 존재하거나, [SUBPAGE:] 또는 링크로 해당 페이지가 확인되는 경우. "
+        "  - unverifiable: 서버사이드에서만 확인 가능한 항목(서버 암호화 방식, DB 저장 방식, HTTPS 설정 등) — 소스코드로 판단 자체가 불가능한 경우. "
+        "⚠️ 핵심 규칙: description에 '~없음', '~미비', '~부재'라고 쓰면서 compliant로 분류하는 것은 논리 모순입니다. 없다고 판단했다면 반드시 violation으로 분류하세요. "
         "2) 단순 안내 문구·링크·설명 텍스트만 있는 경우는 compliant. "
         "3) 실제 데이터 수집/처리 코드(form, input, DB저장 등)가 있어야 violation 가능. "
-        "4) article_id 우선순위 규칙 (반드시 준수): "
-        # "건강정보·병력·성생활·종교·노동조합·정치적 견해 등 민감정보 수집 → PA_23 최우선 선택. "
-        # "주민등록번호·여권번호·운전면허번호 등 고유식별정보 → PA_24 최우선 선택. "
-        # "일반 개인정보 수집·이용 동의 누락 → PA_15 선택. "
-        # "PA_15는 민감정보·고유식별정보가 아닌 일반 개인정보에만 사용할 것. "
+        "4) [SUBPAGE:] 섹션이 존재하면 반드시 해당 내용을 기준으로 판단하세요 (메인 페이지보다 우선). "
+        "5) [SUBPAGE:] 내용이 '[SPA: ...]'이거나 서브페이지 링크 자체가 존재하는 경우, 해당 정보가 없다고 단정하지 말고 compliant로 처리하세요. "
+        "6) 소스코드 부재로 판단이 불가능한 항목(예: 서버 암호화 여부, DB 저장 방식, HTTPS 설정 등)은 "
+        "status를 'unverifiable'로, article_id를 'UNKNOWN'으로 응답하세요. unverifiable 항목에는 법령을 적용하지 마세요. "
+        "7) article_id 우선순위 규칙 (반드시 준수): "
         "평문 비밀번호·암호화 미적용·접근통제 미비 → SA_ 계열 선택. "
-        "5) code_snippet은 violation 시 문제 코드 원문 1~3줄, compliant 시 빈 문자열. "
-        "6) description은 반드시 구체적인 한 문장으로 작성. "
+        "8) code_snippet은 violation 시 문제 코드 원문 1~3줄, compliant/unverifiable 시 빈 문자열. "
+        "9) description은 반드시 구체적인 한 문장으로 작성. "
         "'빈 문자열' '없음' 'N/A' 등 메타 텍스트는 절대 사용 금지. "
         "예시: violation|건강정보 수집 시 별도 동의 절차 없음|PA_23|<input name=\"health_data\">"
     )

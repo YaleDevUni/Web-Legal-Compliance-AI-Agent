@@ -70,12 +70,13 @@ class SourceLocation(BaseModel):
 class ComplianceStatus(str, Enum):
     COMPLIANT = "compliant"
     VIOLATION = "violation"
+    UNVERIFIABLE = "unverifiable"
 
 
 class ComplianceReport(BaseModel):
     status: ComplianceStatus
     description: str
-    citations: Annotated[list[Citation], Field(min_length=1)]
+    citations: list[Citation] = Field(default_factory=list)
     recommendation: str = ""
     source_location: SourceLocation | None = None
 
@@ -86,3 +87,7 @@ class ComplianceReport(BaseModel):
     @property
     def is_violation(self) -> bool:
         return self.status == ComplianceStatus.VIOLATION
+
+    @property
+    def is_unverifiable(self) -> bool:
+        return self.status == ComplianceStatus.UNVERIFIABLE
