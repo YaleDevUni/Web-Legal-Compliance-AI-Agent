@@ -45,7 +45,8 @@ def run_indexing(args):
         
         for law_name in REAL_ESTATE_LAWS:
             try:
-                search_data = list_api.search_laws(query=law_name, nw=3)
+                # target="law"로 명시하여 한글 법령을 검색하도록 함
+                search_data = list_api.search_laws(query=law_name, target="law", nw=3)
                 laws = search_data.get("LawSearch", {}).get("law", [])
                 if isinstance(laws, dict): laws = [laws]
                 

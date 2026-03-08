@@ -1,10 +1,37 @@
 """src/api/routers/search.py — 법령 및 판례 검색 엔드포인트"""
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
-from api.dependencies import get_law_retriever, get_case_retriever, get_qdrant_client
+from api.dependencies import get_law_retriever, get_case_retriever, get_qdrant_client, get_law_graph
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 router = APIRouter(prefix="/api", tags=["search"])
+
+@router.get("/graph")
+async def get_graph(graph = Depends(get_law_graph)):
+    """현재 로드된 지식 그래프의 노드와 엣지 정보를 반환한다."""
+    if not graph:
+        raise HTTPException(status_code=503, detail="지식 그래프가 로드되지 않았습니다.")
+    
+    nodes = []
+    links = []
+    
+    # 노드 정보 구성
+    for node_id, data in graph._graph.nodes(data=True):
+        nodes.append({
+            "id": node_id,
+            "name": f"{data.get('law_name', '')} {data.get('article_number', '')}",
+            "law_name": data.get("law_name"),
+            "article_number": data.get("article_number")
+        })
+    
+    # 엣지 정보 구성
+    for u, v in graph._graph.edges():
+        links.append({
+            "source": u,
+            "target": v
+        })
+        
+    return {"nodes": nodes, "links": links}
 
 @router.get("/search")
 async def search(

@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { ChatPanel } from './components/ChatPanel';
 import { CitationPanel } from './components/CitationPanel';
+import LawGraphView from './components/LawGraphView';
 import { useChat } from './hooks/useChat';
 
 function App() {
@@ -14,6 +16,9 @@ function App() {
     ask,
     resetSession,
   } = useChat();
+
+  // 현재 인용된 조문 ID 목록 추출 (useMemo를 통해 참조값 유지)
+  const citedArticleIds = useMemo(() => citations.map(c => c.article_id), [citations]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
@@ -57,13 +62,32 @@ function App() {
           />
         </div>
 
-        {/* 오른쪽: 인용 (30%) */}
-        <div className="flex-3 min-w-75 h-full hidden lg:block">
-          <CitationPanel
-            citations={citations}
-            activeCitationId={activeCitationId}
-            onCitationClick={setActiveCitationId}
-          />
+        {/* 오른쪽: 인용 (30%) + 그래프 */}
+        <div className="flex-[3] min-w-[300px] h-full hidden lg:flex flex-col gap-4 overflow-hidden">
+          {/* 지식 그래프 뷰 */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-col overflow-hidden h-[300px]">
+            <h3 className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-2">
+              <span className="text-blue-500 text-sm">🕸️</span> 지식 그래프 (Knowledge Graph)
+            </h3>
+            <div className="flex-1 min-h-0 bg-slate-50 rounded-lg overflow-hidden border border-slate-100">
+              <LawGraphView 
+                citedArticleIds={citedArticleIds}
+                onNodeClick={setActiveCitationId}
+                width={320} // 대략적인 우측 패널 너비
+                height={250}
+              />
+            </div>
+            <p className="mt-2 text-[10px] text-slate-400">노드를 클릭하면 조문 내용을 확인할 수 있습니다.</p>
+          </div>
+          
+          {/* 인용 패널 */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <CitationPanel
+              citations={citations}
+              activeCitationId={activeCitationId}
+              onCitationClick={setActiveCitationId}
+            />
+          </div>
         </div>
       </main>
     </div>

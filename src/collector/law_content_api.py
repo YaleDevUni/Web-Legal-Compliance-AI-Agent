@@ -1,6 +1,6 @@
 """src/collector/law_content_api.py — law.go.kr Law Content API 클라이언트 (JSON)"""
 import requests
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from datetime import datetime
 from core.logger import logger
 from core.models import LawArticle
@@ -16,15 +16,7 @@ class LawContentAPIClient:
         self._session = requests.Session()
 
     def fetch_law_content(self, law_id: Optional[str] = None, mst: Optional[str] = None) -> dict[str, Any]:
-        """법령 상세 내용을 JSON으로 가져온다.
-        
-        Args:
-            law_id: 법령ID (ID 파라미터)
-            mst: 법령일련번호 (MST 파라미터)
-            
-        Returns:
-            JSON 응답 본문
-        """
+        """법령 상세 내용을 JSON으로 가져온다."""
         params = {
             "OC": self._api_key,
             "target": "law",
@@ -64,19 +56,14 @@ class LawContentAPIClient:
         jo_list = law_root.get("조문", {}).get("조문단위", [])
         if isinstance(jo_list, dict):
             jo_list = [jo_list]
+        elif not isinstance(jo_list, list):
+            jo_list = []
             
         for jo in jo_list:
             if jo.get("조문여부") != "조문":
                 continue
                 
             jo_num = jo.get("조문번호", "")
-            jo_title = jo.get("조문제목", "")
-            jo_content = jo.get("조문내용", "").strip()
-            
-            # 조문 내용이 제목만 포함하는 경우가 많음. 
-            # 실제 세부 내용은 항/호/목에 있음.
-            # 전체 텍스트를 재구성할 필요가 있을 수 있음 (Phase 2-1 대비).
-            
             full_text = self._reconstruct_content(jo)
             
             try:
@@ -86,7 +73,7 @@ class LawContentAPIClient:
                     article_number=f"제{jo_num}조",
                     content=full_text,
                     sha256=compute_sha256(full_text),
-                    url=f"https://www.law.go.kr/법령/{law_name}", # 혹은 상세링크 사용
+                    url=f"https://www.law.go.kr/법령/{law_name}",
                     updated_at=updated_at,
                 )
                 articles.append(article)
@@ -95,34 +82,54 @@ class LawContentAPIClient:
                 
         return articles
 
+    def _safe_strip(self, val: Union[str, list, Any]) -> str:
+        """값이 리스트인 경우를 대비해 안전하게 strip 처리한다."""
+        if val is None:
+            return ""
+        if isinstance(val, list):
+            # 리스트면 모든 요소를 합친다
+            return " ".join([str(v) for v in val]).strip()
+        return str(val).strip()
+
     def _reconstruct_content(self, jo: dict[str, Any]) -> str:
         """항, 호, 목을 포함하여 전체 조문 내용을 재구성한다."""
         lines = []
-        lines.append(jo.get("조문내용", "").strip())
+        lines.append(self._safe_strip(jo.get("조문내용", "")))
         
         hang_list = jo.get("항", [])
         if isinstance(hang_list, dict):
             hang_list = [hang_list]
+        elif not isinstance(hang_list, list):
+            hang_list = []
             
         for hang in hang_list:
-            hang_content = hang.get("항내용", "").strip()
+            if not isinstance(hang, dict): continue
+            hang_content = self._safe_strip(hang.get("항내용", ""))
             if hang_content:
                 lines.append(hang_content)
                 
             ho_list = hang.get("호", [])
             if isinstance(ho_list, dict):
                 ho_list = [ho_list]
+            elif not isinstance(ho_list, list):
+                ho_list = []
+
             for ho in ho_list:
-                ho_content = ho.get("호내용", "").strip()
+                if not isinstance(ho, dict): continue
+                ho_content = self._safe_strip(ho.get("호내용", ""))
                 if ho_content:
                     lines.append(ho_content)
                     
                 mok_list = ho.get("목", [])
                 if isinstance(mok_list, dict):
                     mok_list = [mok_list]
+                elif not isinstance(mok_list, list):
+                    mok_list = []
+
                 for mok in mok_list:
-                    mok_content = mok.get("목내용", "").strip()
+                    if not isinstance(mok, dict): continue
+                    mok_content = self._safe_strip(mok.get("목내용", ""))
                     if mok_content:
                         lines.append(mok_content)
                         
-        return "\n".join(lines)
+        return "\n".join([line for line in lines if line])

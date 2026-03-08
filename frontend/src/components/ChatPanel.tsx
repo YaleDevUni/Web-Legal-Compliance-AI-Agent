@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import type { Message, Citation } from '../types';
+import { idxToLabel } from '../utils/citationLabel';
 
 interface ChatPanelProps {
   history: Message[];
@@ -79,7 +80,7 @@ function AssistantMarkdown({
                 isActive ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
               }`}
             >
-              {String.fromCharCode(96 + parseInt(idx))}
+              {idxToLabel(parseInt(idx))}
             </button>
           );
         }
