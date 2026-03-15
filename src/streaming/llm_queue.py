@@ -37,12 +37,21 @@ class LLMJobQueue:
     # ------------------------------------------------------------------
 
     async def setup(self) -> None:
-        """Consumer Group 생성 (이미 존재하면 무시)."""
+        """Consumer Group 생성 및 stale consumer 정리."""
         r = await self._get_redis()
         try:
-            await r.xgroup_create(_QUEUE_KEY, _CONSUMER_GROUP, id="0", mkstream=True)
+            await r.xgroup_create(_QUEUE_KEY, _CONSUMER_GROUP, id="$", mkstream=True)
         except Exception:
             pass  # BUSYGROUP: group already exists
+
+        # 재시작 시 이전 consumer 항목 제거 (PID 누적 방지)
+        try:
+            consumers = await r.xinfo_consumers(_QUEUE_KEY, _CONSUMER_GROUP)
+            for c in consumers:
+                name = c.get("name") or c.get(b"name", b"").decode()
+                await r.xgroup_delconsumer(_QUEUE_KEY, _CONSUMER_GROUP, name)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # 요청 큐 (Producer / Consumer)

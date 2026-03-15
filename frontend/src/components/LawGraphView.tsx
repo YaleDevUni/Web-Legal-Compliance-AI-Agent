@@ -32,7 +32,9 @@ const LawGraphView: React.FC<LawGraphViewProps> = React.memo(({
 }) => {
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
 
-  // 전체 그래프 데이터 캐싱 (한 번만 로드)
+  const hasArticles = citedArticleIds.length > 0 || relatedArticleIds.length > 0;
+
+  // 인용된 조문이 있을 때만 그래프 로드
   const { data: fullGraph } = useQuery({
     queryKey: ["law-graph"],
     queryFn: async () => {
@@ -41,6 +43,7 @@ const LawGraphView: React.FC<LawGraphViewProps> = React.memo(({
       return res.json() as Promise<{ nodes: GraphNode[]; links: GraphLink[] }>;
     },
     staleTime: Infinity,
+    enabled: hasArticles,
   });
 
   // 현재 인용/연관된 조문들만 필터링하여 서브그래프 생성

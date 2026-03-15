@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Message, Citation, ChatContentEvent, ChatCitationsEvent } from '../types';
 
@@ -39,6 +39,8 @@ export function useChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [relatedArticleIds, setRelatedArticleIds] = useState<string[]>([]);
+  const [relatedCitations, setRelatedCitations] = useState<Citation[]>([]);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const prevHistoryLenRef = useRef(0);
   const historyRef = useRef<Message[]>([]);
 
@@ -54,17 +56,22 @@ export function useChat() {
     enabled: !!sessionId,
   });
 
-  // 전체 세션 통합 citations (우측 패널용)
-  const { data: sessionCitations = [] } = useQuery<Citation[]>({
-    queryKey: ['citations', sessionId],
-    queryFn: () => {
-      if (!sessionId) return [];
-      const stored = localStorage.getItem(`citations:${sessionId}`);
-      return stored ? (JSON.parse(stored) as Citation[]) : [];
-    },
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+  // 전체 세션 통합 citations — history의 각 assistant 메시지에서 파생
+  const sessionCitations = useMemo<Citation[]>(() => {
+    const seen = new Set<string>();
+    const result: Citation[] = [];
+    for (const msg of history) {
+      if (msg.role === 'assistant' && msg.citations) {
+        for (const c of msg.citations) {
+          if (!seen.has(c.article_id)) {
+            seen.add(c.article_id);
+            result.push(c);
+          }
+        }
+      }
+    }
+    return result;
+  }, [history]);
 
   historyRef.current = history;
 
@@ -79,20 +86,23 @@ export function useChat() {
 
   const resetSession = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(`citations:${sessionId}`);
     queryClient.removeQueries({ queryKey: ['chatHistory', sessionId] });
-    queryClient.removeQueries({ queryKey: ['citations', sessionId] });
     setSessionId('');
     setActiveCitationId(null);
     setStreamingAnswer('');
     setStreamingCitations([]);
     setPendingUserMessage(null);
     setRelatedArticleIds([]);
+    setRelatedCitations([]);
   }, [queryClient, sessionId]);
 
   const ask = useCallback(async (question: string) => {
     prevHistoryLenRef.current = historyRef.current.length;
 
+    // ask() 시점의 누적 citation 수를 캡처 (이번 턴 offset)
+    const citationOffset = sessionCitations.length;
+
+    setHasInteracted(true);
     setLoading(true);
     setError(null);
     setStreamingAnswer('');
@@ -106,7 +116,11 @@ export function useChat() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, session_id: sessionId || undefined }),
+        body: JSON.stringify({
+          question,
+          session_id: sessionId || undefined,
+          citation_offset: citationOffset,
+        }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -127,27 +141,23 @@ export function useChat() {
             setStreamingAnswer((prev) => prev + ev.text);
           } else if (event === 'citations') {
             const ev = payload as ChatCitationsEvent;
-            const sid = ev.session_id || resolvedSessionId;
-            
+
             // 1. 현재 Turn의 인용구 저장 (스트리밍 버블용)
             if (ev.citations && ev.citations.length > 0) {
               setStreamingCitations(ev.citations);
             }
 
-            // 2. 관련 조문 ID 업데이트
+            // 2. 관련 조문(그래프 확장) 누적
+            if (ev.related_citations && ev.related_citations.length > 0) {
+              setRelatedCitations((prev) => {
+                const seen = new Set(prev.map((c) => c.article_id));
+                const next = ev.related_citations!.filter((c) => !seen.has(c.article_id));
+                return next.length > 0 ? [...prev, ...next] : prev;
+              });
+            }
             if (ev.related_articles) {
               setRelatedArticleIds((prev) => Array.from(new Set([...prev, ...ev.related_articles])));
             }
-
-            // 3. 전체 세션 인용구 업데이트 (우측 패널)
-            queryClient.setQueryData<Citation[]>(['citations', sid], (prev = []) => {
-              const existingIds = new Set(prev.map((c) => c.article_id));
-              const newOnes = ev.citations.filter((c) => !existingIds.has(c.article_id));
-              if (newOnes.length === 0) return prev;
-              const updated = [...prev, ...newOnes];
-              localStorage.setItem(`citations:${sid}`, JSON.stringify(updated));
-              return updated;
-            });
 
             if (!sessionId) {
               resolvedSessionId = ev.session_id;
@@ -174,7 +184,7 @@ export function useChat() {
       setPendingUserMessage(null);
       setLoading(false);
     }
-  }, [sessionId, queryClient]);
+  }, [sessionId, sessionCitations.length, queryClient]);
 
   const userInHistory = pendingUserMessage
     ? history.some((m) => m.role === 'user' && m.content === pendingUserMessage)
@@ -188,7 +198,8 @@ export function useChat() {
     history: displayHistory,
     streamingAnswer,
     streamingCitations,
-    citations: sessionCitations,
+    citations: hasInteracted ? sessionCitations : [],
+    relatedCitations,
     activeCitationId,
     setActiveCitationId,
     relatedArticleIds,

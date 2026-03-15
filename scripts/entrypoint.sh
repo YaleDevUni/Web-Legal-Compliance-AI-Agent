@@ -23,7 +23,6 @@ else
   python scripts/build_graph.py
 fi
 
-# API 서버 시작 (CPU 코어 수 기반 멀티워커)
-WORKERS=${UVICORN_WORKERS:-$(nproc)}
-echo "Starting API server with ${WORKERS} workers..."
-exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers "${WORKERS}"
+# API 서버 시작 (LLMWorker가 in-process이므로 단일 워커 고정)
+echo "Starting API server with 1 worker..."
+exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 1

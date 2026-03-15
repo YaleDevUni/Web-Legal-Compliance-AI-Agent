@@ -50,9 +50,10 @@ class LLMWorker:
         question = job["question"]
         session_id = job.get("session_id", "default")
         history = job.get("history", [])
+        citation_offset = job.get("citation_offset", 0)
 
         try:
-            async for chunk in self._agent.aask(question, session_id, history):
+            async for chunk in self._agent.aask(question, session_id, history, citation_offset):
                 chunk = self._serialize_chunk(chunk)
                 await self._queue.publish_chunk(job_id, chunk)
             await self._queue.publish_chunk(
@@ -67,15 +68,16 @@ class LLMWorker:
             await self._queue.ack(msg_id)
 
     @staticmethod
-    def _serialize_chunk(chunk: dict) -> dict:
+    def _serialize_citations(items: list) -> list:
+        return [c.model_dump(mode="json") if hasattr(c, "model_dump") else c for c in items]
+
+    @classmethod
+    def _serialize_chunk(cls, chunk: dict) -> dict:
         """citations 청크의 Citation 객체를 JSON 직렬화 가능한 dict로 변환."""
         if chunk.get("type") != "citations":
             return chunk
-        citations = chunk.get("citations", [])
-        serialized = []
-        for c in citations:
-            if hasattr(c, "model_dump"):
-                serialized.append(c.model_dump(mode="json"))
-            else:
-                serialized.append(c)
-        return {**chunk, "citations": serialized}
+        result = {**chunk}
+        result["citations"] = cls._serialize_citations(chunk.get("citations", []))
+        if "related_citations" in chunk:
+            result["related_citations"] = cls._serialize_citations(chunk.get("related_citations", []))
+        return result

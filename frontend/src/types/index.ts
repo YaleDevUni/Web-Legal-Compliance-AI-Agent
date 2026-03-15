@@ -29,6 +29,7 @@ export interface ChatContentEvent {
 
 export interface ChatCitationsEvent {
   citations: Citation[];
+  related_citations?: Citation[];
   related_articles: string[];
   session_id: string;
 }

@@ -10,6 +10,7 @@ function App() {
     streamingAnswer,
     streamingCitations,
     citations,
+    relatedCitations,
     activeCitationId,
     setActiveCitationId,
     relatedArticleIds,
@@ -94,6 +95,7 @@ function App() {
           <div className="flex-1 min-h-0 overflow-hidden">
             <CitationPanel
               citations={citations}
+              relatedCitations={relatedCitations}
               activeCitationId={activeCitationId}
               onCitationClick={setActiveCitationId}
             />

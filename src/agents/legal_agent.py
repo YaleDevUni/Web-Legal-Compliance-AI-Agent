@@ -38,7 +38,7 @@ class LegalReasoningAgent:
         self._case_retriever = case_retriever
         self._graph_expander = graph_expander
 
-    async def aask(self, question: str, session_id: str = "default", history: List[Dict] = None):
+    async def aask(self, question: str, session_id: str = "default", history: List[Dict] = None, citation_offset: int = 0):
         """질문에 대해 검색, 확장 후 답변을 비동기 스트림으로 생성한다."""
         logger.info(f"비동기 질문 수신: {question}")
 
@@ -51,19 +51,34 @@ class LegalReasoningAgent:
         if self._graph_expander and law_results:
             expanded_results = self._graph_expander.expand(law_results, depth=1)
             
-        # 3. 컨텍스트 구성
-        context_str, citation_map = self._build_context(law_results + expanded_results, case_results)
-        
-        # 4. Citation 데이터 미리 준비
-        citations = self._make_citations(citation_map)
-        related_ids = [res["metadata"].get("article_id") for res in expanded_results if "article_id" in res["metadata"]]
+        # 3. 직접 검색된 article_id 추적 (primary vs related 구분용)
+        primary_ids: set = set()
+        for res in law_results:
+            aid = res["metadata"].get("article_id")
+            if aid:
+                primary_ids.add(aid)
+        for res in case_results:
+            cid = res["metadata"].get("case_id")
+            if cid:
+                primary_ids.add(f"CASE_{cid}")
 
-        # [변경] 스트리밍 시작 전에 인용 정보를 먼저 전달하여 프론트엔드가 즉시 매칭할 수 있게 함
+        # 4. 컨텍스트 구성 (law + expanded 모두 포함해 LLM에 제공)
+        context_str, citation_map = self._build_context(law_results + expanded_results, case_results, citation_offset)
+
+        # 5. Citation 분리: primary(직접 인용) / related(그래프 확장)
+        primary_map = {k: v for k, v in citation_map.items() if k in primary_ids}
+        related_map = {k: v for k, v in citation_map.items() if k not in primary_ids}
+        citations = self._make_citations(primary_map)
+        related_citations = self._make_citations(related_map)
+        related_ids = list(related_map.keys())
+
+        # 스트리밍 시작 전에 인용 정보를 먼저 전달
         yield {
-            "type": "citations", 
-            "citations": citations, 
+            "type": "citations",
+            "citations": citations,
+            "related_citations": related_citations,
             "related_articles": related_ids,
-            "full_answer": "" # 아직 답변 전
+            "full_answer": "",
         }
 
         # 5. LLM 스트리밍 추론
@@ -77,7 +92,15 @@ class LegalReasoningAgent:
                 if role == "user":
                     messages.append(HumanMessage(content=content))
                 elif role == "assistant":
-                    messages.append(AIMessage(content=content))
+                    prev_citations = h.get("citations", [])
+                    if prev_citations:
+                        citation_ctx = "\n".join(
+                            f"[{i+1}] {c.get('law_name', '')} {c.get('article_number', '')}"
+                            for i, c in enumerate(prev_citations)
+                        )
+                        messages.append(AIMessage(content=f"[이전 답변의 인용 정보]\n{citation_ctx}\n\n{content}"))
+                    else:
+                        messages.append(AIMessage(content=content))
 
         user_msg = f"질문: {question}"
         if context_str:
@@ -93,17 +116,18 @@ class LegalReasoningAgent:
         
         # 마지막에 완료 신호와 함께 전체 답변 전달 (세션 저장용)
         yield {
-            "type": "citations", 
-            "citations": citations, 
+            "type": "citations",
+            "citations": citations,
+            "related_citations": related_citations,
             "related_articles": related_ids,
-            "full_answer": "".join(full_answer)
+            "full_answer": "".join(full_answer),
         }
 
-    def _build_context(self, laws: List[Dict], cases: List[Dict]) -> tuple[str, dict]:
+    def _build_context(self, laws: List[Dict], cases: List[Dict], citation_offset: int = 0) -> tuple[str, dict]:
         """검색 결과로부터 LLM 컨텍스트 문자열과 메타데이터 맵을 생성한다."""
         lines = []
         citation_map = {}
-        idx = 1
+        idx = citation_offset + 1
         
         # 법령 조문 합치기 (중복 제거)
         processed_law_ids = set()

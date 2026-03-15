@@ -30,6 +30,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 class ChatRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
+    citation_offset: int = 0
 
 
 def _sse(event: str, data) -> str:
@@ -87,6 +88,7 @@ async def chat(
                 "question": body.question,
                 "session_id": session_id,
                 "history": history,
+                "citation_offset": body.citation_offset,
             })
 
             # ── 3. 응답 스트림 소비 + SSE 전달 ───────────────────────────
