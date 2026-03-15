@@ -8,6 +8,7 @@ function App() {
   const {
     history,
     streamingAnswer,
+    streamingCitations,
     citations,
     activeCitationId,
     setActiveCitationId,

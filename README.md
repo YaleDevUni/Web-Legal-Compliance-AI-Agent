@@ -417,7 +417,7 @@ System Prompt
 | `langchain-qdrant` (VectorStore) | Qdrant 클라이언트를 직접 사용하여 `query_points()` · `scroll()` 세밀 제어 |
 | `ConversationBufferWindowMemory` | Redis List 기반 직접 구현으로 세션 TTL · 직렬화 완전 제어 |
 
-> **설계 원칙**: LangChain의 고수준 추상화는 범용성을 위해 도메인별 최적화를 희생합니다. 법령 계층 청킹, 판례/법령 컬렉션 분리, Redis 큐 연동 등은 직접 구현이 더 적합했습니다. LangChain은 OpenAI API의 인터페이스 레이어로만 활용합니다.
+> **설계 원칙**: LangChain의 고수준 추상화는 범용성을 위해 도메인별 최적화를 희생합니다. 법령 계층 청킹, 판례/법령 컬렉션 분리, Redis 큐 연동 등은 직접 구현이 더 적합했습니다. 
 
 ---
 
